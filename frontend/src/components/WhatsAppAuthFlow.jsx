@@ -73,7 +73,7 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
 
   // Server address config drawer (for Android APK connection)
   const [showServerConfig, setShowServerConfig] = useState(false);
-  const [serverUrlInput, setServerUrlInput] = useState(() => getServerBaseUrl() || 'http://10.103.158.228:4000');
+  const [serverUrlInput, setServerUrlInput] = useState(() => getServerBaseUrl() || 'https://bsdk-clubs.onrender.com');
 
   // Device ID for single primary device session enforcement
   const getDeviceId = () => {
@@ -934,9 +934,27 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: '#075E54' }}>
               Backend Server URL
             </h3>
-            <p style={{ fontSize: 12.5, color: '#667781', marginBottom: 12 }}>
-              For Android APK on local Wi-Fi, point to your PC's IP address:
+            <p style={{ fontSize: 12.5, color: '#667781', marginBottom: 10 }}>
+              Live cloud backend ya local PC server ka URL set karein:
             </p>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="wa-chip-btn active"
+                style={{ fontSize: 11.5, padding: '4px 8px' }}
+                onClick={() => setServerUrlInput('https://bsdk-clubs.onrender.com')}
+              >
+                ☁️ Render Cloud (Live)
+              </button>
+              <button
+                type="button"
+                className="wa-chip-btn"
+                style={{ fontSize: 11.5, padding: '4px 8px' }}
+                onClick={() => setServerUrlInput('http://10.236.42.228:4000')}
+              >
+                🏠 Local PC Wi-Fi
+              </button>
+            </div>
             <input
               type="text"
               className="wa-phone-input"

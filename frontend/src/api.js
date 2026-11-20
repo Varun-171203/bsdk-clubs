@@ -1,7 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 
 // Production Render backend URL for Android APK & remote clients
-const DEFAULT_NATIVE_SERVER = import.meta.env.VITE_SERVER_URL || 'https://bsdk-clubs.onrender.com';
+export const PRODUCTION_RENDER_SERVER = 'https://bsdk-clubs.onrender.com';
+const DEFAULT_NATIVE_SERVER = import.meta.env.VITE_SERVER_URL || PRODUCTION_RENDER_SERVER;
 
 export function isNativeApp() {
   try {
@@ -14,12 +15,14 @@ export function isNativeApp() {
 export function getServerBaseUrl() {
   const saved = localStorage.getItem('bsdk_server_url');
   if (saved && saved.trim()) {
-    return saved.trim().replace(/\/+$/, '');
+    const clean = saved.trim().replace(/\/+$/, '');
+    // Automatically purge old stale local emulator or LAN IP addresses from phone's localStorage!
+    if (!clean.includes('10.0.2.2') && !clean.includes('localhost') && !clean.includes('10.103.') && !clean.includes('10.236.')) {
+      return clean;
+    }
+    localStorage.removeItem('bsdk_server_url');
   }
-  if (isNativeApp()) {
-    return DEFAULT_NATIVE_SERVER.replace(/\/+$/, '');
-  }
-  return ''; // Same-origin on desktop/web browser
+  return DEFAULT_NATIVE_SERVER.replace(/\/+$/, '');
 }
 
 export function setServerBaseUrl(url) {
