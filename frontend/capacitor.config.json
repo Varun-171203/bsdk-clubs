@@ -1,0 +1,13 @@
+{
+  "appId": "app.bsdkclubs.android",
+  "appName": "BSDK Clubs",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#075E54"
+  }
+}
