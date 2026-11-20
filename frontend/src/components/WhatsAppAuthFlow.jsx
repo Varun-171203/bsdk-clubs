@@ -243,20 +243,20 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
         }
       });
 
+      // Persist auth tokens immediately upon successful verification
+      setStoredAuth(data);
+      setPendingAuth(data);
+
       // If user has Two-Step PIN enabled, prompt for PIN
       if (data.requires_two_step) {
-        setPendingAuth(data);
         setStep('two_step_unlock');
         return;
       }
-
-      setPendingAuth(data);
 
       if (data.is_new_user) {
         setStep('profile');
       } else {
         // Existing user: persist auth and go straight Home!
-        setStoredAuth(data);
         onAuthenticated(data);
       }
     } catch (err) {
@@ -296,8 +296,12 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
 
     setLoading(true);
     try {
+      const activeAuth = pendingAuth || getStoredAuth();
+      const activeToken = activeAuth?.access_token;
+
       const updated = await apiRequest('/auth/profile', {
         method: 'POST',
+        token: activeToken,
         body: {
           real_name: cleanName,
           about: about.trim() || 'Hey there! I am on BSDK Clubs',
@@ -306,9 +310,10 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
       });
 
       const fullAuth = {
-        ...pendingAuth,
+        ...activeAuth,
         user: updated.user
       };
+      setStoredAuth(fullAuth);
       setPendingAuth(fullAuth);
 
       // Offer Optional Two-Step Verification
@@ -324,9 +329,10 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
   // HANDLERS: TWO-STEP PIN SETUP & UNLOCK
   // =========================================================================
   async function handleSetupTwoStep(skip = false) {
+    const currentAuth = pendingAuth || getStoredAuth();
     if (skip) {
-      setStoredAuth(pendingAuth);
-      onAuthenticated(pendingAuth);
+      setStoredAuth(currentAuth);
+      onAuthenticated(currentAuth);
       return;
     }
 
@@ -341,10 +347,11 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
     try {
       await apiRequest('/auth/two-step/setup', {
         method: 'POST',
+        token: currentAuth?.access_token,
         body: { pin }
       });
-      setStoredAuth(pendingAuth);
-      onAuthenticated(pendingAuth);
+      setStoredAuth(currentAuth);
+      onAuthenticated(currentAuth);
     } catch (err) {
       setPinError(err.message || 'Failed to setup PIN.');
     } finally {
@@ -592,9 +599,9 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
               </div>
             )}
 
-            {/* 6 Individual OTP Boxes */}
+            {/* 6 Individual WhatsApp-Style Compact OTP Boxes */}
             <div className="wa-otp-boxes-grid">
-              {otpDigits.map((digit, idx) => (
+              {otpDigits.slice(0, 3).map((digit, idx) => (
                 <input
                   key={idx}
                   ref={(el) => (otpInputRefs.current[idx] = el)}
@@ -606,6 +613,20 @@ export function WhatsAppAuthFlow({ onAuthenticated }) {
                   autoFocus={idx === 0}
                   onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                />
+              ))}
+              <span style={{ color: '#8696a0', fontWeight: 600, fontSize: 18, alignSelf: 'center', userSelect: 'none' }}>–</span>
+              {otpDigits.slice(3, 6).map((digit, idx) => (
+                <input
+                  key={idx + 3}
+                  ref={(el) => (otpInputRefs.current[idx + 3] = el)}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  className={`wa-otp-box ${digit ? 'filled' : ''} ${otpError ? 'error' : ''}`}
+                  value={digit}
+                  onChange={(e) => handleOtpDigitChange(idx + 3, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx + 3, e)}
                 />
               ))}
             </div>

@@ -77,11 +77,12 @@ async function refreshAccessToken() {
   return next.access_token;
 }
 
-export async function apiRequest(path, { method = 'GET', body, authRequired = true } = {}) {
+export async function apiRequest(path, { method = 'GET', body, authRequired = true, token } = {}) {
   const auth = getStoredAuth();
   const headers = { 'Content-Type': 'application/json' };
-  if (authRequired && auth?.access_token) {
-    headers.Authorization = `Bearer ${auth.access_token}`;
+  const effectiveToken = token || (authRequired ? auth?.access_token : null);
+  if (effectiveToken) {
+    headers.Authorization = `Bearer ${effectiveToken}`;
   }
 
   const endpoint = `${getApiBase()}${path}`;
