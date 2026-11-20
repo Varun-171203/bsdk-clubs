@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "node --watch src/server.js",
+    "build": "npm --prefix ../frontend install && npm --prefix ../frontend run build && npm install",
     "start": "node src/server.js",
     "test:privacy": "node tests/privacy.test.js"
   },
