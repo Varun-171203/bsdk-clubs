@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../api.js';
 import { QrModal } from './Modals.jsx';
+import { QrCodeModal } from './QrCodeModal.jsx';
+import { InviteScreenModal } from './InviteScreenModal.jsx';
 
 const SETTINGS_MENU = [
   { id: 'account', icon: Key, title: 'Account', sub: 'Security notifications, two-step verification, delete account' },
@@ -43,6 +45,7 @@ export function SettingsPane({
 }) {
   const [section, setSection] = useState(null); // null = Settings Home, or one of SETTINGS_MENU ids or 'profile'
   const [showMyQr, setShowMyQr] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Profile edit state
   const [realName, setRealName] = useState(user.real_name || '');
@@ -754,20 +757,28 @@ export function SettingsPane({
             <div style={{ fontSize: 38 }}>🔥</div>
             <div style={{ fontWeight: 800, fontSize: 19 }}>Gang incomplete hai — 2 dost aur bulao!</div>
             <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              4-5 college ya hostel doston ke saath BSDK Clubs ka asli mazaa aata hai. Apne doston ko link bhejo aur private anonymous club banao!
+              4-5 college ya hostel doston ke saath BSDK Clubs ka asli mazaa aata hai. WhatsApp ya native SMS se direct invite bhejo!
             </p>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ width: '100%', padding: '12px 18px', fontSize: 15 }}
+              onClick={() => setShowInviteModal(true)}
+            >
+              <UserPlus size={18} /> Open WhatsApp / SMS Invite Sheet
+            </button>
             <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-              <input className="text-input" readOnly value={window.location.origin} />
+              <input className="text-input" readOnly value="https://bsdkclubs.app" />
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-secondary"
                 onClick={() => {
-                  navigator.clipboard?.writeText(`Join my gang on BSDK Clubs! ${window.location.origin}`);
+                  navigator.clipboard?.writeText(`Join my gang on BSDK Clubs! https://bsdkclubs.app`);
                   setCopiedInvite(true);
                   setTimeout(() => setCopiedInvite(false), 2000);
                 }}
               >
-                {copiedInvite ? <Check size={16} /> : <Copy size={16} />} {copiedInvite ? 'Copied' : 'Share'}
+                {copiedInvite ? <Check size={16} /> : <Copy size={16} />} {copiedInvite ? 'Copied' : 'Copy Link'}
               </button>
             </div>
           </div>
@@ -775,12 +786,19 @@ export function SettingsPane({
       </div>
 
       {showMyQr && (
-        <QrModal
-          title={`${user.real_name}'s BSDK QR`}
-          subtitle={`User ID: @${user.user_id} — Share your profile handle with friends.`}
-          value={`bsdkclubs://user/${user.user_id}`}
-          codeLabel={`@${user.user_id}`}
+        <QrCodeModal
+          user={user}
           onClose={() => setShowMyQr(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showInviteModal && (
+        <InviteScreenModal
+          phone=""
+          contactName="Dost / Gang Member"
+          onClose={() => setShowInviteModal(false)}
+          onToast={onToast}
         />
       )}
     </div>

@@ -14,6 +14,14 @@ import { UpdatesPane } from './components/UpdatesPane.jsx';
 import { CallsPane } from './components/CallsPane.jsx';
 import { SettingsPane } from './components/SettingsPane.jsx';
 import { CreateClubModal, AliasModal, ReportModal, CameraSnapModal } from './components/Modals.jsx';
+import { NewChatModal } from './components/NewChatModal.jsx';
+import { JoinViaCodeModal } from './components/JoinViaCodeModal.jsx';
+import {
+  parseInviteUri,
+  savePendingInvite,
+  getPendingInvite,
+  applyPendingInvite
+} from './services/inviteService.js';
 
 const DEFAULT_SETTINGS = {
   account: { security_notifications: true, two_step_pin_enabled: false },
@@ -63,9 +71,11 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
   const [showCreateClub, setShowCreateClub] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
   const [showQuickStatusCam, setShowQuickStatusCam] = useState(false);
   const [aliasModalClub, setAliasModalClub] = useState(null);
   const [reportTarget, setReportTarget] = useState(null);
+  const [joinViaCode, setJoinViaCode] = useState(null);
   const [toast, setToast] = useState('');
   const [sessionRevoked, setSessionRevoked] = useState(false);
 
@@ -237,10 +247,40 @@ export default function App() {
     };
   }, [auth?.access_token, loadClubs, loadStatuses]);
 
-  function handleAuthenticated(authData) {
+  // Deep link listener & deferred invite code detection
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const parsed = parseInviteUri(window.location.href);
+      if (parsed?.code) {
+        if (!auth?.access_token) {
+          savePendingInvite(parsed.code);
+        } else {
+          setJoinViaCode(parsed.code);
+        }
+      }
+    }
+  }, [auth?.access_token]);
+
+  async function handleAuthenticated(authData) {
     setStoredAuth(authData);
     setAuth(authData);
     showToast(`Welcome back, ${authData.user.real_name}!`);
+
+    // Deferred invite code application after OTP login
+    const pending = getPendingInvite();
+    if (pending?.code) {
+      try {
+        const joinRes = await applyPendingInvite(apiRequest);
+        if (joinRes?.success) {
+          showToast(`Joined club "${joinRes.club.name}" from invite link!`);
+          loadClubs();
+        } else {
+          setJoinViaCode(pending.code);
+        }
+      } catch {
+        setJoinViaCode(pending.code);
+      }
+    }
   }
 
   function handleLogout() {
@@ -472,6 +512,7 @@ export default function App() {
                 setShowGroupInfo(false);
               }}
               onOpenCreateClub={() => setShowCreateClub(true)}
+              onOpenNewChat={() => setShowNewChat(true)}
               onUpdateClubPref={handleUpdateClubPref}
               onLeaveClub={handleLeaveClub}
             />
@@ -486,6 +527,7 @@ export default function App() {
                 setShowSettings(false);
               }}
               onOpenCreateClub={() => setShowCreateClub(true)}
+              onOpenNewChat={() => setShowNewChat(true)}
               onOpenAliasForClub={(club) => setAliasModalClub(club)}
               onClubJoined={(club) => {
                 loadClubs();
@@ -691,6 +733,33 @@ export default function App() {
             setActiveTab('updates');
             showToast('Anonymous camera status posted (24h)!');
           }}
+        />
+      )}
+
+      {showNewChat && (
+        <NewChatModal
+          isOpen={showNewChat}
+          onClose={() => setShowNewChat(false)}
+          onOpenCreateClub={() => setShowCreateClub(true)}
+          onOpenDirectChat={(club) => {
+            loadClubs();
+            setActiveClubId(club.id);
+            setActiveTab('chats');
+          }}
+          token={auth?.access_token}
+        />
+      )}
+
+      {joinViaCode && (
+        <JoinViaCodeModal
+          initialCode={joinViaCode}
+          onClose={() => setJoinViaCode(null)}
+          onJoinedClub={(club) => {
+            loadClubs();
+            setActiveClubId(club.id);
+            setActiveTab('chats');
+          }}
+          onToast={showToast}
         />
       )}
 

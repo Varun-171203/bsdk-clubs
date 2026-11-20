@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Copy, QrCode, RefreshCw, Clock, BellOff, Image as ImageIcon,
-  Flag, LogOut, Shield, MoreVertical, Edit3, Check, UserX, VolumeX, Ban
+  Flag, LogOut, Shield, MoreVertical, Edit3, Check, UserX, VolumeX, Ban, Lock
 } from 'lucide-react';
 import { apiRequest, formatDisappearingLabel } from '../api.js';
 import { QrModal, MediaGalleryModal } from './Modals.jsx';
+import { SafetyNumberModal } from './SafetyNumberModal.jsx';
 
 export function GroupInfoDrawer({
   club,
@@ -22,6 +23,7 @@ export function GroupInfoDrawer({
   const [loading, setLoading] = useState(true);
   const [showQr, setShowQr] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [editingInfo, setEditingInfo] = useState(false);
   const [editName, setEditName] = useState(club.name);
   const [editDesc, setEditDesc] = useState(club.description || '');
@@ -268,6 +270,23 @@ export function GroupInfoDrawer({
           <button type="button" className="popover-item" onClick={() => setShowGallery(true)}>
             <ImageIcon size={17} color="#128C7E" /> Media Gallery (Live Snaps)
           </button>
+
+          <button
+            type="button"
+            className="popover-item"
+            style={{ justifyContent: 'space-between' }}
+            onClick={() => setShowSafetyModal(true)}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Lock size={17} color="#128C7E" />
+              <span style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>Encryption</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                  Messages are end-to-end encrypted. Tap to verify.
+                </div>
+              </span>
+            </span>
+          </button>
         </div>
 
         {/* REAL MEMBERS LIST (The Core Trust Feature!) */}
@@ -373,6 +392,19 @@ export function GroupInfoDrawer({
           clubName={club.name}
           messages={messages}
           onClose={() => setShowGallery(false)}
+        />
+      )}
+
+      {showSafetyModal && (
+        <SafetyNumberModal
+          isGroup={true}
+          clubName={club.name}
+          peerName={club.name}
+          peerUserId={`club-${club.id}`}
+          peerIdentityKey={`club-e2ee-key-${club.id}`}
+          myUserId={club.my_alias || 'user'}
+          onClose={() => setShowSafetyModal(false)}
+          onVerified={() => onToast && onToast('Security code verified for this club!')}
         />
       )}
     </aside>

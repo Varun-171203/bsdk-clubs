@@ -1,9 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_USER_SETTINGS } from '../common/utils.js';
+import { DEFAULT_USER_SETTINGS, hashPhoneNumber } from '../common/utils.js';
 import { repairDatabaseSchema } from './repair_db.js';
 
 export function initDatabase(dbPath) {
@@ -24,6 +25,7 @@ export function initDatabase(dbPath) {
       user_id TEXT UNIQUE,
       country_code TEXT DEFAULT '+91',
       phone TEXT UNIQUE,
+      phone_hash TEXT,
       password_hash TEXT,
       email TEXT,
       real_name TEXT NOT NULL DEFAULT '',
@@ -218,13 +220,104 @@ export function initDatabase(dbPath) {
       reason TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS prekeys (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      identity_key TEXT NOT NULL,
+      signed_prekey TEXT NOT NULL,
+      signed_prekey_sig TEXT NOT NULL,
+      one_time_prekeys_json TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS direct_conversations (
+      id TEXT PRIMARY KEY,
+      user1_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user2_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user1_id, user2_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_direct_conv_u1 ON direct_conversations(user1_id);
+    CREATE INDEX IF NOT EXISTS idx_direct_conv_u2 ON direct_conversations(user2_id);
+
+    CREATE TABLE IF NOT EXISTS e2ee_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      club_id TEXT,
+      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ciphertext TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      ephemeral_key TEXT,
+      type TEXT NOT NULL DEFAULT 'text',
+      media_blob_ref TEXT,
+      status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read')),
+      expires_at TEXT,
+      created_at TEXT NOT NULL,
+      delivered_at TEXT,
+      read_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_e2ee_conv_created ON e2ee_messages(conversation_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_e2ee_recipient_status ON e2ee_messages(recipient_id, status);
+
+    CREATE TABLE IF NOT EXISTS encrypted_media (
+      id TEXT PRIMARY KEY,
+      uploader_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+      byte_size INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS invites (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL DEFAULT 'user' CHECK (type IN ('user', 'club')),
+      club_id TEXT REFERENCES clubs(id) ON DELETE CASCADE,
+      qr_data TEXT NOT NULL,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_invites_code ON invites(code);
+    CREATE INDEX IF NOT EXISTS idx_invites_owner ON invites(owner_id);
+
+    CREATE TABLE IF NOT EXISTS invite_tracking (
+      id TEXT PRIMARY KEY,
+      inviter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      phone_hash TEXT NOT NULL,
+      invite_method TEXT NOT NULL DEFAULT 'sms',
+      invited_at TEXT NOT NULL,
+      joined_at TEXT,
+      reminded_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_invite_track_hash ON invite_tracking(phone_hash);
+    CREATE INDEX IF NOT EXISTS idx_invite_track_inviter ON invite_tracking(inviter_id);
   `);
 
   // Migrate columns for existing SQLite DBs
   try { db.exec('ALTER TABLE users ADD COLUMN country_code TEXT DEFAULT "+91";'); } catch {}
+  try { db.exec('ALTER TABLE users ADD COLUMN phone_hash TEXT;'); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_phone_hash ON users(phone_hash);'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN two_step_pin_hash TEXT;'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "active";'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT;'); } catch {}
+
+  // Populate phone_hash for existing records if missing
+  try {
+    const unhashedUsers = db.prepare('SELECT id, phone, country_code FROM users WHERE phone_hash IS NULL AND phone IS NOT NULL').all();
+    if (unhashedUsers.length > 0) {
+      const updateStmt = db.prepare('UPDATE users SET phone_hash = ? WHERE id = ?');
+      for (const u of unhashedUsers) {
+        const ph = hashPhoneNumber(u.phone, u.country_code);
+        if (ph) updateStmt.run(ph, u.id);
+      }
+    }
+  } catch (err) {
+    console.error('[DB Migration] Error populating phone_hash:', err);
+  }
 
   // Ensure any orphaned users_old references are cleanly repaired
   try {
@@ -315,15 +408,16 @@ function seedDemoData(db) {
   ];
 
   const insertUser = db.prepare(`
-    INSERT INTO users (id, user_id, password_hash, phone, email, real_name, profile_photo_url, about, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, user_id, password_hash, phone, phone_hash, email, real_name, profile_photo_url, about, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertSettings = db.prepare(`
     INSERT INTO user_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)
   `);
 
   for (const u of demoUsers) {
-    insertUser.run(u.id, u.user_id, passHash, u.phone, u.email, u.real_name, u.photo, u.about, iso(-86400000 * 14));
+    const ph = hashPhoneNumber(u.phone, '+91');
+    insertUser.run(u.id, u.user_id, passHash, u.phone, ph, u.email, u.real_name, u.photo, u.about, iso(-86400000 * 14));
     insertSettings.run(u.id, JSON.stringify(DEFAULT_USER_SETTINGS), iso(-86400000 * 14));
   }
 

@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 
 // Production Render backend URL for Android APK & remote clients
 export const PRODUCTION_RENDER_SERVER = 'https://bsdk-clubs.onrender.com';
-const DEFAULT_NATIVE_SERVER = import.meta.env.VITE_SERVER_URL || PRODUCTION_RENDER_SERVER;
+const DEFAULT_NATIVE_SERVER = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SERVER_URL) || (typeof process !== 'undefined' && process.env?.VITE_SERVER_URL) || PRODUCTION_RENDER_SERVER;
 
 export function isNativeApp() {
   try {

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Search, MoreVertical, Smile, Paperclip, Camera, Mic, Send,
   Check, CheckCheck, Clock, Reply, Copy, Flag, Trash2, X, BarChart2,
-  Edit3, Info, Ban, Sparkles
+  Edit3, Info, Ban, Sparkles, Lock
 } from 'lucide-react';
 import { apiRequest, formatTime, formatDisappearingLabel, resolveMediaUrl } from '../api.js';
 import { CameraSnapModal, CreatePollModal } from './Modals.jsx';
+import { SafetyNumberModal } from './SafetyNumberModal.jsx';
 
 const QUICK_REACTIONS = ['😂', '🔥', '❤️', '🙌', '👀', '😭'];
 const EMOJI_LIST = [
@@ -41,6 +42,7 @@ export function ChatWindow({
   const [searchQuery, setSearchQuery] = useState('');
   const [openMenuMsgId, setOpenMenuMsgId] = useState(null);
   const [lightboxImg, setLightboxImg] = useState(null);
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
 
   const bottomRef = useRef(null);
   const typingTimerRef = useRef(null);
@@ -190,6 +192,17 @@ export function ChatWindow({
             Group Info
           </button>{' '}
           mein dekho.
+        </div>
+
+        {/* WhatsApp End-to-End Encryption Security Code Pill */}
+        <div
+          className="system-pill"
+          style={{ cursor: 'pointer', background: 'rgba(254, 243, 199, 0.9)', color: '#92400e', border: '1px solid #fde68a' }}
+          onClick={() => setShowSafetyModal(true)}
+          title="Verify 60-digit End-to-End Encryption Safety Code"
+        >
+          <Lock size={12} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 5, color: '#92400e' }} />
+          Messages are end-to-end encrypted with Signal Protocol. Tap to verify security code.
         </div>
 
         {filteredMessages.map((msg) => {
@@ -564,6 +577,19 @@ export function ChatWindow({
             style={{ maxWidth: '92vw', maxHeight: '88vh', borderRadius: 12 }}
           />
         </div>
+      )}
+
+      {showSafetyModal && (
+        <SafetyNumberModal
+          isGroup={true}
+          clubName={club.name}
+          peerName={club.name}
+          peerUserId={`club-${club.id}`}
+          peerIdentityKey={`club-e2ee-key-${club.id}`}
+          myUserId={club.my_alias || 'user'}
+          onClose={() => setShowSafetyModal(false)}
+          onVerified={() => onToast && onToast('Security code verified for this club!')}
+        />
       )}
     </div>
   );

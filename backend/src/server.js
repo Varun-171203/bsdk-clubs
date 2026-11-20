@@ -24,6 +24,10 @@ import { createAuthRouter } from './modules/auth.routes.js';
 import { createClubsRouter } from './modules/clubs.routes.js';
 import { createMessagesRouter } from './modules/messages.routes.js';
 import { createStatusSafetyRouter } from './modules/status-safety.routes.js';
+import { createContactsRouter } from './modules/contacts.routes.js';
+import { createKeysRouter } from './modules/keys.routes.js';
+import { createInvitesRouter } from './modules/invites.routes.js';
+import { createE2EEMessagesRouter } from './modules/e2ee-messages.routes.js';
 import { setupSocketGateway } from './realtime/socket.js';
 import { startExpiryJob } from './jobs/expiry.job.js';
 
@@ -65,6 +69,10 @@ export function createApp({ dbPath } = {}) {
   app.use('/api/v1', createClubsRouter(db, requireAuth, io));
   app.use('/api/v1', createMessagesRouter(db, requireAuth, io));
   app.use('/api/v1', createStatusSafetyRouter(db, requireAuth, io));
+  app.use('/api/v1', createContactsRouter(db, requireAuth));
+  app.use('/api/v1', createKeysRouter(db, requireAuth));
+  app.use('/api/v1', createInvitesRouter(db, requireAuth));
+  app.use('/api/v1', createE2EEMessagesRouter(db, requireAuth, io));
 
   // Setup realtime WebSocket gateway
   setupSocketGateway(io, db);

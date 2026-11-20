@@ -7,7 +7,10 @@
     "dev": "node --watch src/server.js",
     "build": "npm install",
     "start": "node src/server.js",
-    "test:privacy": "node tests/privacy.test.js"
+    "test:privacy": "node tests/privacy.test.js",
+    "test:agent4": "node tests/agent4_backend.test.js",
+    "test:e2ee": "node tests/agent2_e2ee.test.js",
+    "test": "node tests/privacy.test.js && node tests/agent2_e2ee.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

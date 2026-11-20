@@ -10,14 +10,22 @@ import {
   recordFailedAttempt,
   clearAttempts
 } from '../common/auth.js';
-import { sendError, DEFAULT_USER_SETTINGS } from '../common/utils.js';
+import { sendError, DEFAULT_USER_SETTINGS, hashPhoneNumber } from '../common/utils.js';
 import { sendSmsOtp, getSmsProviderStatus } from '../common/sms.js';
 
 // Normalize phone numbers (e.g. India +91 9876543210 -> +919876543210)
 export function normalizePhone(countryCode = '+91', phoneRaw = '') {
   const cleanCode = String(countryCode || '+91').trim().replace(/[^0-9+]/g, '');
-  const digits = String(phoneRaw || '').trim().replace(/[^0-9]/g, '');
   const prefix = cleanCode.startsWith('+') ? cleanCode : `+${cleanCode}`;
+  const codeDigits = prefix.replace('+', '');
+  let digits = String(phoneRaw || '').trim().replace(/[^0-9]/g, '');
+
+  if (codeDigits && digits.startsWith(codeDigits) && digits.length > codeDigits.length) {
+    digits = digits.slice(codeDigits.length);
+  } else if (digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+
   return {
     countryCode: prefix,
     digits,
@@ -203,10 +211,18 @@ export function createAuthRouter(db, requireAuth) {
       isNewUser = true;
       const id = uuidv4();
       const fallbackUid = `gang_${digits.slice(-4)}_${crypto.randomInt(10, 99)}`;
+      const phoneHash = hashPhoneNumber(normalized, countryCode);
       db.prepare(`
-        INSERT INTO users (id, user_id, country_code, phone, password_hash, real_name, about, profile_photo_url, created_at, status, last_seen)
-        VALUES (?, ?, ?, ?, '', '', 'Hey there! I am on BSDK Clubs', NULL, ?, 'active', ?)
-      `).run(id, fallbackUid, countryCode, normalized, nowIso, nowIso);
+        INSERT INTO users (id, user_id, country_code, phone, phone_hash, password_hash, real_name, about, profile_photo_url, created_at, status, last_seen)
+        VALUES (?, ?, ?, ?, ?, '', '', 'Hey there! I am on BSDK Clubs', NULL, ?, 'active', ?)
+      `).run(id, fallbackUid, countryCode, normalized, phoneHash, nowIso, nowIso);
+
+      // Check if someone invited this phone hash, mark joined_at
+      try {
+        if (phoneHash) {
+          db.prepare('UPDATE invite_tracking SET joined_at = ? WHERE phone_hash = ? AND joined_at IS NULL').run(nowIso, phoneHash);
+        }
+      } catch {}
 
       db.prepare(`
         INSERT INTO user_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)
@@ -216,7 +232,8 @@ export function createAuthRouter(db, requireAuth) {
     } else {
       // If user was created without real_name yet, flag as new user so they finish Profile Setup
       isNewUser = !user.real_name || user.real_name.trim().length === 0;
-      db.prepare('UPDATE users SET last_seen = ? WHERE id = ?').run(nowIso, user.id);
+      const phoneHash = user.phone_hash || hashPhoneNumber(user.phone, user.country_code);
+      db.prepare('UPDATE users SET last_seen = ?, phone_hash = COALESCE(phone_hash, ?) WHERE id = ?').run(nowIso, phoneHash, user.id);
     }
 
     if (user.is_banned) {

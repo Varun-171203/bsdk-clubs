@@ -12,6 +12,8 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "android:sync": "npm --prefix frontend run build && npm --prefix frontend run cap:sync",
     "android:open": "npm --prefix frontend run cap:open",
-    "test:privacy": "npm --prefix backend run test:privacy"
+    "test:privacy": "npm --prefix backend run test:privacy",
+    "test:e2ee": "npm --prefix backend run test:e2ee",
+    "test": "npm --prefix backend run test"
   }
 }

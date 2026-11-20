@@ -23,6 +23,29 @@ export function runExpiryCleanup(db) {
     DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?
   `).run(nowIso);
 
+  // 1b. Hard-delete expired E2EE ciphertext messages & encrypted media files
+  const encMediaDir = path.resolve(process.cwd(), 'data', 'encrypted_media');
+  try {
+    const expiredE2EE = db.prepare(`
+      SELECT id, media_blob_ref FROM e2ee_messages WHERE expires_at IS NOT NULL AND expires_at <= ?
+    `).all(nowIso);
+
+    for (const em of expiredE2EE) {
+      if (em.media_blob_ref) {
+        const encPath = path.join(encMediaDir, path.basename(em.media_blob_ref));
+        if (fs.existsSync(encPath)) {
+          try { fs.unlinkSync(encPath); } catch { /* ignore */ }
+        }
+      }
+    }
+
+    db.prepare(`
+      DELETE FROM e2ee_messages WHERE expires_at IS NOT NULL AND expires_at <= ?
+    `).run(nowIso);
+  } catch {
+    // If table not present in early test DBs, ignore
+  }
+
   // 2. Find & hard-delete expired 24h statuses + their media files
   const expiredStatuses = db.prepare(`
     SELECT id, media_url FROM statuses WHERE expires_at <= ?

@@ -9,6 +9,7 @@ export function ChatListPane({
   activeClubId,
   onSelectClub,
   onOpenCreateClub,
+  onOpenNewChat,
   onUpdateClubPref,
   onLeaveClub
 }) {
@@ -177,14 +178,14 @@ export function ChatListPane({
         )}
       </div>
 
-      {/* Green FAB for New Club */}
+      {/* Green FAB for New Chat / Select Contact */}
       <button
         type="button"
         className="fab"
-        title="Create New Club"
-        onClick={onOpenCreateClub}
+        title="New Chat / Select Contact"
+        onClick={onOpenNewChat || onOpenCreateClub}
       >
-        <Plus size={25} />
+        <MessageSquarePlus size={24} />
       </button>
     </div>
   );

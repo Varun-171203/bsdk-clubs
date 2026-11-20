@@ -76,6 +76,37 @@ export function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+export function normalizePhoneE164(phone, defaultCountryCode = '+91') {
+  if (!phone) return '';
+  const str = String(phone).trim();
+  const digits = str.replace(/[^0-9]/g, '');
+  if (!digits) return '';
+
+  const cleanDefault = defaultCountryCode.startsWith('+') ? defaultCountryCode : `+${defaultCountryCode}`;
+  const defaultDigits = cleanDefault.replace('+', '');
+
+  if (str.startsWith('+')) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10) {
+    return `${cleanDefault}${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return `${cleanDefault}${digits.slice(1)}`;
+  }
+  if (digits.startsWith(defaultDigits) && digits.length === defaultDigits.length + 10) {
+    return `+${digits}`;
+  }
+  return `+${digits}`;
+}
+
+export function hashPhoneNumber(rawPhone, countryCode = '+91') {
+  if (!rawPhone) return null;
+  const normalized = normalizePhoneE164(rawPhone, countryCode);
+  if (!normalized) return null;
+  return crypto.createHash('sha256').update(normalized).digest('hex');
+}
+
 // Standard API error format (Section 6)
 export function sendError(res, status, code, message) {
   return res.status(status).json({
