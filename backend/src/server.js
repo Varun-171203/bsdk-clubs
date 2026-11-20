@@ -89,6 +89,16 @@ export function createApp({ dbPath } = {}) {
     });
   }
 
+  // Root welcome endpoint for API status check
+  app.get('/', (req, res) => {
+    return res.json({
+      status: 'online',
+      product: 'BSDK Clubs API',
+      version: '3.0.0',
+      message: 'Your Gang. Your Bang. Backend API is running successfully!'
+    });
+  });
+
   // Fallback 404 for API
   app.use('/api', (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'API endpoint nahi mila.');
