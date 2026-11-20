@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 
-// Default LAN / Emulator backend URL when running inside the Android APK
-const DEFAULT_NATIVE_SERVER = import.meta.env.VITE_SERVER_URL || 'http://10.103.158.228:4000';
+// Production Render backend URL for Android APK & remote clients
+const DEFAULT_NATIVE_SERVER = import.meta.env.VITE_SERVER_URL || 'https://bsdk-clubs.onrender.com';
 
 export function isNativeApp() {
   try {
