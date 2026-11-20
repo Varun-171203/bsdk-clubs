@@ -50,6 +50,32 @@
    npm run test:privacy
    ```
 
+## Deploying to Render (Free Cloud Hosting)
+
+This repository includes a ready-to-use `render.yaml` blueprint.
+
+### 1-Click / Blueprint Deploy:
+1. Log in to [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** > **Blueprint**.
+3. Connect your GitHub repository: `https://github.com/Varun-171203/bsdk-clubs`.
+4. Click **Apply**. Render will automatically detect `render.yaml`, build the frontend, and start the backend service.
+
+### Manual Web Service Deploy:
+1. On Render, click **New +** > **Web Service**.
+2. Select your repository `bsdk-clubs`.
+3. Configure the service:
+   - **Environment:** `Node`
+   - **Build Command:** `npm run build`
+   - **Start Command:** `npm start`
+   - **Plan:** `Free`
+4. In **Environment Variables**, add:
+   - `NODE_ENV`: `production`
+   - `PORT`: `10000`
+   - `JWT_SECRET`: `your_custom_secret_key`
+   - `JWT_REFRESH_SECRET`: `your_custom_refresh_key`
+   - `CLIENT_ORIGIN`: `*`
+5. Click **Create Web Service**. Your app will be live with a free `https://bsdk-clubs.onrender.com` URL!
+
 ## Production Stack Reference
 - `docker-compose.yml` provides PostgreSQL 16 + Redis 7.
 - `backend/sql/schema.postgres.sql` contains the complete PostgreSQL DDL matching Section 5 of the documentation.
