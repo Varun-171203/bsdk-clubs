@@ -350,8 +350,8 @@ export function parseInviteUri(uriString) {
     };
   }
 
-  // Deep Link 1: bsdkclubs://invite/<code> or bsdkclubs://join/<code>
-  const schemeInvite = str.match(/^bsdkclubs:\/\/(?:invite|join)\/([A-Za-z0-9_-]+)/i);
+  // Deep Link 1: bsdkclubs://club/join/<code>, bsdkclubs://invite/<code>, or bsdkclubs://join/<code>
+  const schemeInvite = str.match(/^bsdkclubs:\/\/(?:club\/join|invite|join)\/([A-Za-z0-9_-]+)/i);
   if (schemeInvite) {
     return { type: 'invite', code: schemeInvite[1].toUpperCase(), raw: str };
   }
@@ -367,8 +367,8 @@ export function parseInviteUri(uriString) {
     };
   }
 
-  // HTTP(S) URL: https://bsdkclubs.app/invite/<code> or https://.../join/<code>
-  const httpInvite = str.match(/^https?:\/\/[^\/]+\/(?:invite|join)\/([A-Za-z0-9_-]+)/i);
+  // HTTP(S) URL: https://bsdkclubs.app/club/join/<code>, https://bsdkclubs.app/invite/<code> or https://.../join/<code>
+  const httpInvite = str.match(/^https?:\/\/[^\/]+\/(?:club\/join|invite|join)\/([A-Za-z0-9_-]+)/i);
   if (httpInvite) {
     return { type: 'invite', code: httpInvite[1].toUpperCase(), raw: str };
   }

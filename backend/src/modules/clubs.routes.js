@@ -7,11 +7,13 @@ import {
   isAliasClean,
   ALIAS_COLORS
 } from '../common/utils.js';
+import { createOptionalAuthMiddleware } from '../common/auth.js';
 
 const MAX_CLUB_MEMBERS = 256; // Section 2.4 constraint
 
 export function createClubsRouter(db, requireAuth, io) {
   const router = express.Router();
+  const optionalAuth = createOptionalAuthMiddleware(db);
 
   // Helper to fetch user's membership in a club
   function getMembership(clubId, userId) {
@@ -157,50 +159,24 @@ export function createClubsRouter(db, requireAuth, io) {
     return res.json({ clubs });
   });
 
-  // GET /api/v1/clubs/preview/:inviteCode - Join preview BEFORE accepting (Page 3 Step 5)
-  router.get('/clubs/preview/:inviteCode', requireAuth, (req, res) => {
-    const code = String(req.params.inviteCode || '').trim().toUpperCase();
-    const club = db.prepare('SELECT id, name, photo_url, description, disappearing_seconds, created_at FROM clubs WHERE UPPER(invite_code) = ?').get(code);
-    if (!club) {
-      return sendError(res, 404, 'NOT_FOUND', 'Ye invite code invalid ya expire ho chuka hai.');
-    }
-    const members = db.prepare(`
-      SELECT u.id as user_id, u.real_name, u.profile_photo_url, cm.role
-      FROM club_members cm
-      JOIN users u ON u.id = cm.user_id
-      WHERE cm.club_id = ?
-      ORDER BY cm.role ASC, u.real_name ASC
-    `).all(club.id);
-
-    const alreadyMember = members.some((m) => m.user_id === req.user.id);
-    return res.json({
-      club: {
-        ...club,
-        member_count: members.length,
-        already_member: alreadyMember,
-        members // Real members visible before joining for trust!
-      }
-    });
-  });
-
-  // POST /api/v1/clubs/join - Join via invite_code + auto-assign unique per-group alias
-  router.post('/clubs/join', requireAuth, (req, res) => {
-    const code = String(req.body?.invite_code || '').trim().toUpperCase();
-    if (!code) {
-      return sendError(res, 400, 'VALIDATION', 'Invite code daalo.');
-    }
-
-    const club = db.prepare('SELECT * FROM clubs WHERE UPPER(invite_code) = ?').get(code);
-    if (!club) {
-      return sendError(res, 404, 'NOT_FOUND', 'Invite code galat hai ya admin ne reset kar diya hai.');
-    }
-
-    const existing = getMembership(club.id, req.user.id);
-    if (existing) {
-      return sendError(res, 409, 'ALREADY_MEMBER', 'Tum is club mein already member ho!');
-    }
-
+  // Helper to handle joining a club
+  function handleClubJoin(club, userId, res) {
+    const existing = getMembership(club.id, userId);
     const existingMembers = db.prepare('SELECT alias_name FROM club_members WHERE club_id = ?').all(club.id);
+
+    if (existing) {
+      return res.status(200).json({
+        already_member: true,
+        club: {
+          ...club,
+          my_alias: existing.alias_name,
+          my_alias_color: existing.alias_color,
+          my_role: existing.role,
+          member_count: existingMembers.length
+        }
+      });
+    }
+
     if (existingMembers.length >= MAX_CLUB_MEMBERS) {
       return sendError(res, 400, 'CLUB_FULL', `Ye club full hai (max ${MAX_CLUB_MEMBERS} members).`);
     }
@@ -213,12 +189,12 @@ export function createClubsRouter(db, requireAuth, io) {
     db.prepare(`
       INSERT INTO club_members (id, club_id, user_id, role, alias_name, alias_color, joined_at)
       VALUES (?, ?, ?, 'member', ?, ?, ?)
-    `).run(memberId, club.id, req.user.id, alias_name, alias_color, now);
+    `).run(memberId, club.id, userId, alias_name, alias_color, now);
 
     db.prepare(`
       INSERT OR REPLACE INTO club_user_prefs (user_id, club_id, is_pinned, is_muted, is_archived, last_read_at)
       VALUES (?, ?, 0, 0, 0, ?)
-    `).run(req.user.id, club.id, now);
+    `).run(userId, club.id, now);
 
     const sysMsgId = uuidv4();
     const disp = club.disappearing_seconds;
@@ -244,6 +220,7 @@ export function createClubsRouter(db, requireAuth, io) {
     }
 
     return res.status(201).json({
+      already_member: false,
       club: {
         ...club,
         my_alias: alias_name,
@@ -252,6 +229,70 @@ export function createClubsRouter(db, requireAuth, io) {
         member_count: existingMembers.length + 1
       }
     });
+  }
+
+  // GET /api/v1/clubs/preview/:inviteCode - Join preview BEFORE accepting (WhatsApp style)
+  router.get('/clubs/preview/:inviteCode', optionalAuth, (req, res) => {
+    const rawCode = String(req.params.inviteCode || '').trim();
+    const code = rawCode.replace(/^.*\/club\/join\//i, '').replace(/^bsdk:invite:/i, '').trim().toUpperCase();
+    
+    // Check if explicitly revoked
+    const revoked = db.prepare('SELECT id, revoked_at FROM invites WHERE UPPER(code) = ? AND revoked_at IS NOT NULL').get(code);
+    if (revoked) {
+      return sendError(res, 410, 'INVITE_REVOKED', 'This invite link has been reset and is no longer valid.');
+    }
+
+    const club = db.prepare('SELECT id, name, photo_url, description, disappearing_seconds, invite_code, created_at FROM clubs WHERE UPPER(invite_code) = ?').get(code);
+    if (!club) {
+      return sendError(res, 404, 'NOT_FOUND', 'This invite link is invalid or expired.');
+    }
+    const members = db.prepare(`
+      SELECT u.id as user_id, u.real_name, u.profile_photo_url, cm.role
+      FROM club_members cm
+      JOIN users u ON u.id = cm.user_id
+      WHERE cm.club_id = ?
+      ORDER BY cm.role ASC, u.real_name ASC
+    `).all(club.id);
+
+    const alreadyMember = Boolean(req.user && members.some((m) => m.user_id === req.user.id));
+    return res.json({
+      club: {
+        ...club,
+        member_count: members.length,
+        already_member: alreadyMember,
+        members: members.slice(0, 10) // First 10 members visible for preview
+      }
+    });
+  });
+
+  // POST /api/v1/clubs/join - Join via invite_code + auto-assign unique per-group alias
+  router.post('/clubs/join', requireAuth, (req, res) => {
+    const rawCode = String(req.body?.invite_code || '').trim();
+    const code = rawCode.replace(/^.*\/club\/join\//i, '').replace(/^bsdk:invite:/i, '').trim().toUpperCase();
+    if (!code) {
+      return sendError(res, 400, 'VALIDATION', 'Invite code daalo.');
+    }
+
+    const revoked = db.prepare('SELECT id, revoked_at FROM invites WHERE UPPER(code) = ? AND revoked_at IS NOT NULL').get(code);
+    if (revoked) {
+      return sendError(res, 410, 'INVITE_REVOKED', 'This invite link has been reset and is no longer valid.');
+    }
+
+    const club = db.prepare('SELECT * FROM clubs WHERE UPPER(invite_code) = ?').get(code);
+    if (!club) {
+      return sendError(res, 404, 'NOT_FOUND', 'Invite code galat hai ya admin ne reset kar diya hai.');
+    }
+
+    return handleClubJoin(club, req.user.id, res);
+  });
+
+  // POST /api/v1/clubs/:id/join - Join club directly by ID
+  router.post('/clubs/:id/join', requireAuth, (req, res) => {
+    const club = db.prepare('SELECT * FROM clubs WHERE id = ?').get(req.params.id);
+    if (!club) {
+      return sendError(res, 404, 'NOT_FOUND', 'Club nahi mila.');
+    }
+    return handleClubJoin(club, req.user.id, res);
   });
 
   // GET /api/v1/clubs/:id - Club details
@@ -313,8 +354,23 @@ export function createClubsRouter(db, requireAuth, io) {
     if (!membership || membership.role !== 'admin') {
       return sendError(res, 403, 'ADMIN_ONLY', 'Sirf Admin invite link reset kar sakta hai.');
     }
+    const oldClub = db.prepare('SELECT invite_code FROM clubs WHERE id = ?').get(req.params.id);
     const newCode = generateInviteCode();
     db.prepare('UPDATE clubs SET invite_code = ? WHERE id = ?').run(newCode, req.params.id);
+
+    if (oldClub?.invite_code) {
+      const now = new Date().toISOString();
+      const existing = db.prepare('SELECT id FROM invites WHERE UPPER(code) = ?').get(oldClub.invite_code.toUpperCase());
+      if (existing) {
+        db.prepare('UPDATE invites SET revoked_at = ? WHERE id = ?').run(now, existing.id);
+      } else {
+        db.prepare(`
+          INSERT INTO invites (id, code, owner_id, type, club_id, qr_data, created_at, revoked_at)
+          VALUES (?, ?, ?, 'club', ?, ?, ?, ?)
+        `).run(uuidv4(), oldClub.invite_code.toUpperCase(), req.user.id, req.params.id, `bsdk:invite:${oldClub.invite_code.toUpperCase()}`, now, now);
+      }
+    }
+
     return res.json({ invite_code: newCode });
   });
 

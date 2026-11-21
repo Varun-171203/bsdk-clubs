@@ -1,8 +1,12 @@
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 // Production Render backend URL for Android APK & remote clients
 export const PRODUCTION_RENDER_SERVER = 'https://bsdk-clubs.onrender.com';
-const DEFAULT_NATIVE_SERVER = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SERVER_URL) || (typeof process !== 'undefined' && process.env?.VITE_SERVER_URL) || PRODUCTION_RENDER_SERVER;
+const DEFAULT_NATIVE_SERVER =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SERVER_URL) ||
+  (typeof process !== 'undefined' && process.env?.VITE_SERVER_URL) ||
+  PRODUCTION_RENDER_SERVER;
 
 export function isNativeApp() {
   try {
@@ -16,8 +20,13 @@ export function getServerBaseUrl() {
   const saved = localStorage.getItem('bsdk_server_url');
   if (saved && saved.trim()) {
     const clean = saved.trim().replace(/\/+$/, '');
-    // Automatically purge old stale local emulator or LAN IP addresses from phone's localStorage!
-    if (!clean.includes('10.0.2.2') && !clean.includes('localhost') && !clean.includes('10.103.') && !clean.includes('10.236.')) {
+    // Automatically purge old stale local emulator or LAN IP addresses
+    if (
+      !clean.includes('10.0.2.2') &&
+      !clean.includes('localhost') &&
+      !clean.includes('10.103.') &&
+      !clean.includes('10.236.')
+    ) {
       return clean;
     }
     localStorage.removeItem('bsdk_server_url');
@@ -45,41 +54,179 @@ export function getApiBase() {
   return `${getServerBaseUrl()}/api/v1`;
 }
 
+// ============================================================================
+// PERSISTENT STORAGE VIA CAPACITOR PREFERENCES + LOCALSTORAGE DUAL-LAYER
+// ============================================================================
+let memoryAuth = null;
+try {
+  const raw = localStorage.getItem('bsdk_auth');
+  if (raw) memoryAuth = JSON.parse(raw);
+} catch {}
+
+let memoryDeviceId = null;
+try {
+  memoryDeviceId = localStorage.getItem('bsdk_device_id');
+} catch {}
+
+export function getDeviceId() {
+  if (memoryDeviceId) return memoryDeviceId;
+  try {
+    const stored = localStorage.getItem('bsdk_device_id');
+    if (stored) {
+      memoryDeviceId = stored;
+      return stored;
+    }
+  } catch {}
+  const newId = 'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  memoryDeviceId = newId;
+  try {
+    localStorage.setItem('bsdk_device_id', newId);
+    Preferences.set({ key: 'bsdk_device_id', value: newId }).catch(() => {});
+  } catch {}
+  return newId;
+}
+
 export function getStoredAuth() {
+  if (memoryAuth) return memoryAuth;
   try {
     const raw = localStorage.getItem('bsdk_auth');
-    return raw ? JSON.parse(raw) : null;
+    if (raw) {
+      memoryAuth = JSON.parse(raw);
+      return memoryAuth;
+    }
+  } catch {}
+  return null;
+}
+
+export function setStoredAuth(auth) {
+  memoryAuth = auth;
+  try {
+    if (!auth) {
+      localStorage.removeItem('bsdk_auth');
+      Preferences.remove({ key: 'bsdk_auth' }).catch(() => {});
+    } else {
+      const val = JSON.stringify(auth);
+      localStorage.setItem('bsdk_auth', val);
+      Preferences.set({ key: 'bsdk_auth', value: val }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[setStoredAuth error]', err);
+  }
+}
+
+// Initialise auth session on app startup (hydrating from native SharedPreferences)
+export async function initAuthSession() {
+  try {
+    // 1. Sync device id
+    const devPref = await Preferences.get({ key: 'bsdk_device_id' });
+    if (devPref.value) {
+      memoryDeviceId = devPref.value;
+      localStorage.setItem('bsdk_device_id', devPref.value);
+    } else {
+      const id = getDeviceId();
+      await Preferences.set({ key: 'bsdk_device_id', value: id });
+    }
+
+    // 2. Sync auth from native SharedPreferences
+    const authPref = await Preferences.get({ key: 'bsdk_auth' });
+    if (authPref.value) {
+      const parsed = JSON.parse(authPref.value);
+      if (parsed?.access_token || parsed?.refresh_token) {
+        memoryAuth = parsed;
+        localStorage.setItem('bsdk_auth', authPref.value);
+        return memoryAuth;
+      }
+    }
+  } catch (err) {
+    console.warn('[initAuthSession error]', err);
+  }
+  return getStoredAuth();
+}
+
+// Disk-cached clubs for instantaneous launch
+export function getCachedClubs() {
+  try {
+    const raw = localStorage.getItem('bsdk_cached_clubs');
+    return raw ? JSON.parse(raw) : [];
   } catch {
+    return [];
+  }
+}
+
+export function setCachedClubs(clubs) {
+  try {
+    const val = JSON.stringify(clubs || []);
+    localStorage.setItem('bsdk_cached_clubs', val);
+    Preferences.set({ key: 'bsdk_cached_clubs', value: val }).catch(() => {});
+  } catch {}
+}
+
+// Disk-cached messages per club for instantaneous launch
+export function getCachedMessages(clubId) {
+  if (!clubId) return [];
+  try {
+    const raw = localStorage.getItem(`bsdk_msgs_${clubId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setCachedMessages(clubId, messages) {
+  if (!clubId) return;
+  try {
+    const val = JSON.stringify(messages || []);
+    localStorage.setItem(`bsdk_msgs_${clubId}`, val);
+  } catch {}
+}
+
+// Silent background token refresh
+export async function silentRefreshSession() {
+  const auth = getStoredAuth();
+  if (!auth?.refresh_token) return null;
+
+  try {
+    const res = await fetch(`${getApiBase()}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': getDeviceId()
+      },
+      body: JSON.stringify({ refresh_token: auth.refresh_token })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      if (errData?.error?.code === 'SESSION_REVOKED') {
+        const err = new Error(errData.error.message || 'Session revoked');
+        err.code = 'SESSION_REVOKED';
+        throw err;
+      }
+      return null;
+    }
+
+    const data = await res.json();
+    const nextAuth = {
+      ...auth,
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || auth.refresh_token,
+      user: data.user || auth.user
+    };
+    setStoredAuth(nextAuth);
+    return nextAuth.access_token;
+  } catch (err) {
+    if (err.code === 'SESSION_REVOKED') throw err;
     return null;
   }
 }
 
-export function setStoredAuth(auth) {
-  if (!auth) {
-    localStorage.removeItem('bsdk_auth');
-  } else {
-    localStorage.setItem('bsdk_auth', JSON.stringify(auth));
-  }
-}
-
-async function refreshAccessToken() {
-  const auth = getStoredAuth();
-  if (!auth?.refresh_token) return null;
-  const res = await fetch(`${getApiBase()}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: auth.refresh_token })
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const next = { ...auth, access_token: data.access_token, refresh_token: data.refresh_token };
-  setStoredAuth(next);
-  return next.access_token;
-}
-
+// Central API Request helper with single primary device header and auto-refresh
 export async function apiRequest(path, { method = 'GET', body, authRequired = true, token } = {}) {
   const auth = getStoredAuth();
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-device-id': getDeviceId()
+  };
   const effectiveToken = token || (authRequired ? auth?.access_token : null);
   if (effectiveToken) {
     headers.Authorization = `Bearer ${effectiveToken}`;
@@ -99,16 +246,22 @@ export async function apiRequest(path, { method = 'GET', body, authRequired = tr
     );
   }
 
-  // Auto-refresh token once on 401
+  // Auto-refresh token once on 401 if refresh_token available
   if (res.status === 401 && authRequired && auth?.refresh_token) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      headers.Authorization = `Bearer ${newToken}`;
-      res = await fetch(endpoint, {
-        method,
-        headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined
-      });
+    try {
+      const newToken = await silentRefreshSession();
+      if (newToken) {
+        headers.Authorization = `Bearer ${newToken}`;
+        res = await fetch(endpoint, {
+          method,
+          headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined
+        });
+      }
+    } catch (refreshErr) {
+      if (refreshErr.code === 'SESSION_REVOKED') {
+        throw refreshErr;
+      }
     }
   }
 

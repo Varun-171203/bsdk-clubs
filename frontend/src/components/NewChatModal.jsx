@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, Search, Users, UserPlus, PhoneCall, RefreshCw, Sparkles,
-  Share2, Check, MessageSquare, AlertCircle, ShieldCheck, X
+  Share2, Check, MessageSquare, AlertCircle, ShieldCheck, X, Loader2
 } from 'lucide-react';
 import {
   syncContacts,
@@ -14,6 +14,7 @@ import {
   getNewlyJoinedNotifications,
   dismissJoinedNotification
 } from '../services/contactsService.js';
+import { apiRequest } from '../api.js';
 import { ContactsPermissionModal } from './ContactsPermissionModal.jsx';
 import { ManualNumberModal } from './ManualNumberModal.jsx';
 
@@ -46,11 +47,50 @@ export function NewChatModal({
   const [joinedBanners, setJoinedBanners] = useState([]);
   const [copiedInvitePhone, setCopiedInvitePhone] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [serverSearchResult, setServerSearchResult] = useState(null);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
 
   const showToast = useCallback((msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 2800);
   }, []);
+
+  // Live Server search for phone numbers
+  useEffect(() => {
+    const clean = search.trim();
+    const hasDigits = /\d{3,}/.test(clean);
+    if (!hasDigits) {
+      setServerSearchResult(null);
+      setIsSearchingServer(false);
+      return;
+    }
+
+    setIsSearchingServer(true);
+    const timer = setTimeout(async () => {
+      try {
+        const data = await apiRequest(`/users/search?phone=${encodeURIComponent(clean)}`, { token });
+        if (data?.found && data?.user) {
+          setServerSearchResult({
+            found: true,
+            user: data.user,
+            phone: data.phone_e164 || clean
+          });
+        } else {
+          setServerSearchResult({
+            found: false,
+            phone: data?.phone_e164 || clean
+          });
+        }
+      } catch (err) {
+        console.warn('[Server search error]', err);
+        setServerSearchResult(null);
+      } finally {
+        setIsSearchingServer(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [search, token]);
 
   // Fetch or sync contacts
   const loadContacts = useCallback(async (forceRefresh = false) => {
@@ -501,7 +541,73 @@ export function NewChatModal({
                 </span>
               </div>
 
-              {filteredRegistered.length === 0 ? (
+              {/* Searching Server Spinner */}
+              {isSearchingServer && (
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', color: '#128C7E', fontSize: '13px' }}>
+                  <Loader2 size={16} className="spin-slow" />
+                  <span>Checking registered numbers on BSDK Clubs...</span>
+                </div>
+              )}
+
+              {/* Direct Server Registered Match (if found via number search) */}
+              {serverSearchResult?.found && serverSearchResult.user && (
+                <div
+                  className="chat-row"
+                  onClick={() => handleContactClick({ registeredUser: serverSearchResult.user, contactName: serverSearchResult.user.real_name || serverSearchResult.phone })}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '10px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    backgroundColor: 'rgba(37, 211, 102, 0.08)',
+                    borderLeft: '4px solid #25D366'
+                  }}
+                >
+                  <img
+                    src={
+                      serverSearchResult.user.profile_photo_url ||
+                      `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(serverSearchResult.user.real_name || serverSearchResult.phone)}`
+                    }
+                    alt=""
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      backgroundColor: 'var(--bg-panel-alt)'
+                    }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
+                        {serverSearchResult.user.real_name || serverSearchResult.phone}
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#25D366', color: '#fff', borderRadius: '8px', padding: '1px 6px', fontWeight: 700 }}>
+                        Registered
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--text-secondary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        marginTop: '2px'
+                      }}
+                    >
+                      {serverSearchResult.user.about || 'Hey there! I am on BSDK Clubs'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#128C7E', fontWeight: 600 }}>
+                      {serverSearchResult.phone}
+                    </div>
+                  </div>
+                  <MessageSquare size={18} color="#128C7E" />
+                </div>
+              )}
+
+              {filteredRegistered.length === 0 && !serverSearchResult?.found ? (
                 <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
                   {query ? 'No matching contacts found on BSDK Clubs.' : 'No contacts on BSDK Clubs yet.'}
                 </div>
@@ -596,7 +702,62 @@ export function NewChatModal({
                 </span>
               </div>
 
-              {filteredUnregistered.length === 0 ? (
+              {/* Direct Server Non-Registered Match (Invite to BSDK Clubs) */}
+              {serverSearchResult && !serverSearchResult.found && (
+                <div
+                  className="chat-row"
+                  style={{
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    backgroundColor: 'rgba(37, 211, 102, 0.05)',
+                    borderLeft: '4px solid #25D366'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#128C7E'
+                    }}
+                  >
+                    <PhoneCall size={20} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>
+                      Invite {serverSearchResult.phone} to BSDK Clubs
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                      Not registered on BSDK Clubs yet
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInvite({ contactName: serverSearchResult.phone, normalizedPhone: serverSearchResult.phone })}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      backgroundColor: '#25D366',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 3px rgba(37, 211, 102, 0.3)'
+                    }}
+                  >
+                    INVITE
+                  </button>
+                </div>
+              )}
+
+              {filteredUnregistered.length === 0 && (!serverSearchResult || serverSearchResult.found) ? (
                 <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
                   {query ? 'No matching contacts to invite.' : 'All contacts are already on BSDK Clubs!'}
                 </div>

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_USER_SETTINGS, hashPhoneNumber } from '../common/utils.js';
+import { DEFAULT_USER_SETTINGS, hashPhoneNumber, normalizePhoneE164 } from '../common/utils.js';
 import { repairDatabaseSchema } from './repair_db.js';
 
 export function initDatabase(dbPath) {
@@ -25,6 +25,7 @@ export function initDatabase(dbPath) {
       user_id TEXT UNIQUE,
       country_code TEXT DEFAULT '+91',
       phone TEXT UNIQUE,
+      phone_e164 TEXT UNIQUE,
       phone_hash TEXT,
       password_hash TEXT,
       email TEXT,
@@ -33,12 +34,14 @@ export function initDatabase(dbPath) {
       about TEXT DEFAULT 'Hey there! I am on BSDK Clubs',
       two_step_pin_hash TEXT,
       status TEXT NOT NULL DEFAULT 'active',
+      is_registered INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       last_seen TEXT,
       is_banned INTEGER NOT NULL DEFAULT 0,
       delete_requested_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+    CREATE INDEX IF NOT EXISTS idx_users_phone_e164 ON users(phone_e164);
 
     CREATE TABLE IF NOT EXISTS otp_codes (
       phone TEXT PRIMARY KEY,
@@ -299,24 +302,28 @@ export function initDatabase(dbPath) {
 
   // Migrate columns for existing SQLite DBs
   try { db.exec('ALTER TABLE users ADD COLUMN country_code TEXT DEFAULT "+91";'); } catch {}
+  try { db.exec('ALTER TABLE users ADD COLUMN phone_e164 TEXT;'); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_phone_e164 ON users(phone_e164);'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN phone_hash TEXT;'); } catch {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_phone_hash ON users(phone_hash);'); } catch {}
+  try { db.exec('ALTER TABLE users ADD COLUMN is_registered INTEGER DEFAULT 1;'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN two_step_pin_hash TEXT;'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "active";'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT;'); } catch {}
 
-  // Populate phone_hash for existing records if missing
+  // Populate phone_e164 and phone_hash for existing records if missing
   try {
-    const unhashedUsers = db.prepare('SELECT id, phone, country_code FROM users WHERE phone_hash IS NULL AND phone IS NOT NULL').all();
+    const unhashedUsers = db.prepare('SELECT id, phone, country_code, phone_e164, phone_hash FROM users WHERE phone IS NOT NULL').all();
     if (unhashedUsers.length > 0) {
-      const updateStmt = db.prepare('UPDATE users SET phone_hash = ? WHERE id = ?');
+      const updateStmt = db.prepare('UPDATE users SET phone_e164 = COALESCE(phone_e164, ?), phone_hash = COALESCE(phone_hash, ?), is_registered = 1 WHERE id = ?');
       for (const u of unhashedUsers) {
-        const ph = hashPhoneNumber(u.phone, u.country_code);
-        if (ph) updateStmt.run(ph, u.id);
+        const e164 = normalizePhoneE164(u.phone, u.country_code || '+91');
+        const ph = hashPhoneNumber(e164 || u.phone, u.country_code || '+91');
+        updateStmt.run(e164 || u.phone, ph, u.id);
       }
     }
   } catch (err) {
-    console.error('[DB Migration] Error populating phone_hash:', err);
+    console.error('[DB Migration] Error populating phone_e164 / phone_hash:', err);
   }
 
   // Ensure any orphaned users_old references are cleanly repaired

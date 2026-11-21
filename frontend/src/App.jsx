@@ -3,7 +3,12 @@ import { io } from 'socket.io-client';
 import {
   MessageCircle, Users, Disc, Phone, MoreVertical, Settings, Plus, Camera, Sparkles
 } from 'lucide-react';
-import { apiRequest, getStoredAuth, setStoredAuth, getServerBaseUrl } from './api.js';
+import {
+  apiRequest, getStoredAuth, setStoredAuth, getServerBaseUrl,
+  initAuthSession, getCachedClubs, setCachedClubs, getCachedMessages,
+  setCachedMessages, silentRefreshSession
+} from './api.js';
+import { App as CapApp } from '@capacitor/app';
 import { BrandLogo } from './components/BrandLogo.jsx';
 import { WhatsAppAuthFlow } from './components/WhatsAppAuthFlow.jsx';
 import { ChatListPane } from './components/ChatListPane.jsx';
@@ -16,6 +21,7 @@ import { SettingsPane } from './components/SettingsPane.jsx';
 import { CreateClubModal, AliasModal, ReportModal, CameraSnapModal } from './components/Modals.jsx';
 import { NewChatModal } from './components/NewChatModal.jsx';
 import { JoinViaCodeModal } from './components/JoinViaCodeModal.jsx';
+import { ClubJoinModal } from './components/ClubJoinModal.jsx';
 import {
   parseInviteUri,
   savePendingInvite,
@@ -60,7 +66,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'clubs' | 'updates' | 'calls'
-  const [clubs, setClubs] = useState([]);
+  const [clubs, setClubs] = useState(() => getCachedClubs());
   const [activeClubId, setActiveClubId] = useState(null);
   const [messagesByClub, setMessagesByClub] = useState({});
   const [statusGroups, setStatusGroups] = useState([]);
@@ -76,6 +82,7 @@ export default function App() {
   const [aliasModalClub, setAliasModalClub] = useState(null);
   const [reportTarget, setReportTarget] = useState(null);
   const [joinViaCode, setJoinViaCode] = useState(null);
+  const [pendingClubInvite, setPendingClubInvite] = useState(null);
   const [toast, setToast] = useState('');
   const [sessionRevoked, setSessionRevoked] = useState(false);
 
@@ -97,25 +104,86 @@ export default function App() {
     localStorage.setItem('bsdk_settings', JSON.stringify(settings));
   }, [settings]);
 
+  // Persistent Session Initialization from Native SharedPreferences on Boot
+  useEffect(() => {
+    let mounted = true;
+    initAuthSession().then((persistedAuth) => {
+      if (!mounted) return;
+      if (persistedAuth) {
+        setAuth(persistedAuth);
+        const cached = getCachedClubs();
+        if (cached && cached.length > 0) {
+          setClubs(cached);
+          setActiveClubId((prev) => prev || cached[0]?.id || null);
+        }
+        silentRefreshSession().then(() => {
+          if (mounted) loadClubs();
+        }).catch((err) => {
+          if (err.code === 'SESSION_REVOKED') {
+            setSessionRevoked(true);
+            setStoredAuth(null);
+            setAuth(null);
+          }
+        });
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Deep Link Listener: Handles WhatsApp-style links, QR scans and Android intents
+  useEffect(() => {
+    function checkInviteUrl(urlStr) {
+      if (!urlStr) return;
+      const match = String(urlStr).match(/(?:club\/join\/|invite\/|join\/|bsdk:invite:)([A-Za-z0-9_-]+)/i);
+      if (match && match[1]) {
+        setPendingClubInvite(match[1].toUpperCase());
+      }
+    }
+
+    checkInviteUrl(window.location.href);
+
+    let capSub = null;
+    try {
+      capSub = CapApp.addListener('appUrlOpen', (event) => {
+        checkInviteUrl(event.url);
+      });
+    } catch {}
+
+    const onDeepLink = (e) => {
+      const target = e.detail?.url || e.detail?.code;
+      if (target) checkInviteUrl(target);
+    };
+    window.addEventListener('bsdk:deeplink', onDeepLink);
+
+    return () => {
+      if (capSub && capSub.remove) capSub.remove();
+      window.removeEventListener('bsdk:deeplink', onDeepLink);
+    };
+  }, []);
+
   const loadClubs = useCallback(async () => {
     if (!auth?.access_token) return;
     try {
       const data = await apiRequest('/clubs');
-      setClubs(data.clubs || []);
+      const newClubs = data.clubs || [];
+      setClubs(newClubs);
+      setCachedClubs(newClubs);
       setActiveClubId((prev) => {
-        if (prev && (data.clubs || []).some((c) => c.id === prev)) return prev;
-        return (data.clubs && data.clubs[0]?.id) || null;
+        if (prev && newClubs.some((c) => c.id === prev)) return prev;
+        return newClubs[0]?.id || null;
       });
     } catch (err) {
       if (err.code === 'SESSION_REVOKED') {
         setSessionRevoked(true);
         setStoredAuth(null);
+        setAuth(null);
         return;
       }
-      if (err.status === 401) {
-        setStoredAuth(null);
-        setAuth(null);
-      }
+      // Never wipe auth on network lag or 401: stay logged in with cached clubs!
+      console.warn('[loadClubs network warning]', err);
     }
   }, [auth?.access_token]);
 
@@ -137,20 +205,27 @@ export default function App() {
 
   const loadMessages = useCallback(async (clubId) => {
     if (!clubId || !auth?.access_token) return;
+    // Show cached messages immediately
+    const cached = getCachedMessages(clubId);
+    if (cached && cached.length > 0) {
+      setMessagesByClub((prev) => ({ ...prev, [clubId]: cached }));
+    }
     try {
       const data = await apiRequest(`/clubs/${clubId}/messages?limit=80`);
-      setMessagesByClub((prev) => ({ ...prev, [clubId]: data.messages || [] }));
+      const msgs = data.messages || [];
+      setMessagesByClub((prev) => ({ ...prev, [clubId]: msgs }));
+      setCachedMessages(clubId, msgs);
       // Clear local unread count for this club
       setClubs((prev) => prev.map((c) => (c.id === clubId ? { ...c, unread_count: 0 } : c)));
       // Mark latest message read
-      const last = (data.messages || []).slice(-1)[0];
+      const last = msgs.slice(-1)[0];
       if (last && !last.is_mine) {
         apiRequest(`/messages/${last.id}/read`, { method: 'POST' }).catch(() => {});
       }
     } catch (err) {
-      showToast(err.message);
+      console.warn('[loadMessages warning]', err);
     }
-  }, [auth?.access_token, showToast]);
+  }, [auth?.access_token]);
 
   // Initial load after login
   useEffect(() => {
@@ -760,6 +835,19 @@ export default function App() {
             setActiveTab('chats');
           }}
           onToast={showToast}
+        />
+      )}
+
+      {pendingClubInvite && (
+        <ClubJoinModal
+          inviteCode={pendingClubInvite}
+          onClose={() => setPendingClubInvite(null)}
+          onJoined={(joinedClub) => {
+            loadClubs();
+            setActiveClubId(joinedClub.id);
+            setActiveTab('chats');
+            showToast(`Joined ${joinedClub.name}!`);
+          }}
         />
       )}
 

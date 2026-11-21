@@ -1,6 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { sendError, generateUniqueAlias, generateInviteCode } from '../common/utils.js';
+import { sendError, generateUniqueAlias, generateInviteCode, normalizePhoneE164, hashPhoneNumber } from '../common/utils.js';
 
 // Rate limiting in-memory map: user_id -> { count, windowStart }
 const lookupLimiter = new Map();
@@ -22,6 +22,99 @@ function checkLookupRateLimit(userId) {
 
 export function createContactsRouter(db, requireAuth) {
   const router = express.Router();
+
+  // ========================================================================
+  // GET /users/search?phone=<e164_or_local>
+  // Fast, debounced manual number search for any registered user on BSDK Clubs
+  // ========================================================================
+  router.get('/users/search', requireAuth, (req, res) => {
+    const raw = String(req.query.phone || req.query.q || '').trim();
+    if (!raw) {
+      return sendError(res, 400, 'MISSING_PARAM', 'phone query parameter is required.');
+    }
+
+    const norm = normalizePhoneE164(raw, '+91');
+    if (!norm) {
+      return sendError(res, 400, 'INVALID_FORMAT', 'Invalid phone number format.');
+    }
+
+    const hash = hashPhoneNumber(norm);
+    const user = db.prepare(`
+      SELECT id, user_id, real_name, profile_photo_url, about, last_seen
+      FROM users
+      WHERE (phone_e164 = ? OR phone_hash = ? OR phone = ?)
+        AND is_banned = 0
+        AND is_registered = 1
+      LIMIT 1
+    `).get(norm, hash, norm);
+
+    if (user) {
+      return res.json({
+        found: true,
+        phone_e164: norm,
+        user: {
+          id: user.id,
+          user_id: user.user_id,
+          real_name: user.real_name || 'BSDK Member',
+          profile_photo_url: user.profile_photo_url || `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(user.user_id)}&backgroundColor=075e54`,
+          about: user.about || 'Hey there! I am on BSDK Clubs',
+          last_seen: user.last_seen
+        }
+      });
+    }
+
+    return res.json({
+      found: false,
+      phone_e164: norm,
+      message: 'This number is not registered on BSDK Clubs yet.'
+    });
+  });
+
+  // ========================================================================
+  // POST /users/lookup { phone_e164 }
+  // ========================================================================
+  router.post('/users/lookup', requireAuth, (req, res) => {
+    const raw = String(req.body?.phone_e164 || req.body?.phone || '').trim();
+    if (!raw) {
+      return sendError(res, 400, 'MISSING_PHONE', 'phone_e164 is required.');
+    }
+
+    const norm = normalizePhoneE164(raw, '+91');
+    if (!norm) {
+      return sendError(res, 400, 'INVALID_FORMAT', 'Invalid phone format.');
+    }
+
+    const hash = hashPhoneNumber(norm);
+    const user = db.prepare(`
+      SELECT id, user_id, real_name, profile_photo_url, about, last_seen
+      FROM users
+      WHERE (phone_e164 = ? OR phone_hash = ? OR phone = ?)
+        AND is_banned = 0
+        AND is_registered = 1
+      LIMIT 1
+    `).get(norm, hash, norm);
+
+    if (user) {
+      return res.json({
+        found: true,
+        phone_e164: norm,
+        user: {
+          id: user.id,
+          user_id: user.user_id,
+          real_name: user.real_name || 'BSDK Member',
+          profile_photo_url: user.profile_photo_url || `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(user.user_id)}&backgroundColor=075e54`,
+          about: user.about || 'Hey there! I am on BSDK Clubs',
+          last_seen: user.last_seen
+        }
+      });
+    }
+
+    return res.json({
+      found: false,
+      phone_e164: norm,
+      message: 'This number is not registered on BSDK Clubs yet.'
+    });
+  });
 
   // ========================================================================
   // POST /contacts/lookup

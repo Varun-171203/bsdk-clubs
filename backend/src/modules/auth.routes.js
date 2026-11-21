@@ -20,7 +20,7 @@ export function normalizePhone(countryCode = '+91', phoneRaw = '') {
   const codeDigits = prefix.replace('+', '');
   let digits = String(phoneRaw || '').trim().replace(/[^0-9]/g, '');
 
-  if (codeDigits && digits.startsWith(codeDigits) && digits.length > codeDigits.length) {
+  if (codeDigits && digits.startsWith(codeDigits) && digits.length > 10) {
     digits = digits.slice(codeDigits.length);
   } else if (digits.length === 11 && digits.startsWith('0')) {
     digits = digits.slice(1);
@@ -213,9 +213,9 @@ export function createAuthRouter(db, requireAuth) {
       const fallbackUid = `gang_${digits.slice(-4)}_${crypto.randomInt(10, 99)}`;
       const phoneHash = hashPhoneNumber(normalized, countryCode);
       db.prepare(`
-        INSERT INTO users (id, user_id, country_code, phone, phone_hash, password_hash, real_name, about, profile_photo_url, created_at, status, last_seen)
-        VALUES (?, ?, ?, ?, ?, '', '', 'Hey there! I am on BSDK Clubs', NULL, ?, 'active', ?)
-      `).run(id, fallbackUid, countryCode, normalized, phoneHash, nowIso, nowIso);
+        INSERT INTO users (id, user_id, country_code, phone, phone_e164, phone_hash, password_hash, real_name, about, profile_photo_url, created_at, status, last_seen, is_registered)
+        VALUES (?, ?, ?, ?, ?, ?, '', '', 'Hey there! I am on BSDK Clubs', NULL, ?, 'active', ?, 1)
+      `).run(id, fallbackUid, countryCode, normalized, normalized, phoneHash, nowIso, nowIso);
 
       // Check if someone invited this phone hash, mark joined_at
       try {
@@ -233,7 +233,7 @@ export function createAuthRouter(db, requireAuth) {
       // If user was created without real_name yet, flag as new user so they finish Profile Setup
       isNewUser = !user.real_name || user.real_name.trim().length === 0;
       const phoneHash = user.phone_hash || hashPhoneNumber(user.phone, user.country_code);
-      db.prepare('UPDATE users SET last_seen = ?, phone_hash = COALESCE(phone_hash, ?) WHERE id = ?').run(nowIso, phoneHash, user.id);
+      db.prepare('UPDATE users SET last_seen = ?, phone_e164 = COALESCE(phone_e164, ?), phone_hash = COALESCE(phone_hash, ?), is_registered = 1 WHERE id = ?').run(nowIso, normalized, phoneHash, user.id);
     }
 
     if (user.is_banned) {
@@ -302,7 +302,7 @@ export function createAuthRouter(db, requireAuth) {
     }
 
     db.prepare(`
-      UPDATE users SET real_name = ?, about = ?, profile_photo_url = ? WHERE id = ?
+      UPDATE users SET real_name = ?, about = ?, profile_photo_url = ?, is_registered = 1 WHERE id = ?
     `).run(cleanName, cleanAbout, cleanPhoto || null, req.user.id);
 
     const updated = db.prepare(`
@@ -477,13 +477,15 @@ export function createAuthRouter(db, requireAuth) {
         return sendError(res, 401, 'UNAUTHORIZED', 'Session invalid or account suspended.');
       }
 
-      const currentDeviceId = device_id || decoded.device_id;
+      const currentDeviceId = device_id || req.headers['x-device-id'] || decoded.device_id;
       if (currentDeviceId) {
-        const revoked = db.prepare(`
-          SELECT id FROM sessions WHERE user_id = ? AND device_id = ? AND revoked_at IS NOT NULL
+        const latestSession = db.prepare(`
+          SELECT id, revoked_at FROM sessions
+          WHERE user_id = ? AND device_id = ?
+          ORDER BY created_at DESC LIMIT 1
         `).get(user.id, currentDeviceId);
 
-        if (revoked) {
+        if (latestSession && latestSession.revoked_at) {
           return sendError(
             res,
             401,
@@ -496,9 +498,26 @@ export function createAuthRouter(db, requireAuth) {
       const newAccessToken = signAccessToken(user, currentDeviceId);
       const newRefreshToken = signRefreshToken(user, currentDeviceId);
 
+      // Keep active session refresh token hash updated
+      try {
+        db.prepare(`
+          UPDATE sessions SET refresh_token_hash = ?
+          WHERE user_id = ? AND device_id = ? AND revoked_at IS NULL
+        `).run(bcrypt.hashSync(newRefreshToken, 8), user.id, currentDeviceId);
+      } catch {}
+
       return res.json({
         access_token: newAccessToken,
-        refresh_token: newRefreshToken
+        refresh_token: newRefreshToken,
+        user: {
+          id: user.id,
+          user_id: user.user_id,
+          phone: user.phone,
+          country_code: user.country_code,
+          real_name: user.real_name,
+          about: user.about,
+          profile_photo_url: user.profile_photo_url
+        }
       });
     } catch {
       return sendError(res, 401, 'UNAUTHORIZED', 'Session expired. Please log in again.');
@@ -545,9 +564,9 @@ export function createAuthRouter(db, requireAuth) {
   });
 
   // ========================================================================
-  // 11. GET /me & Legacy Auth Compatibility Support
+  // 11. GET /me & GET /auth/me
   // ========================================================================
-  router.get('/me', requireAuth, (req, res) => {
+  router.get(['/me', '/auth/me'], requireAuth, (req, res) => {
     return res.json({
       user: {
         id: req.user.id,

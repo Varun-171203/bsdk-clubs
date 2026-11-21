@@ -23,6 +23,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep Linking for WhatsApp-style club & invite links -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="bsdkclubs.app" android:pathPrefix="/club/join" />
+                <data android:scheme="https" android:host="bsdkclubs.app" android:pathPrefix="/invite" />
+                <data android:scheme="https" android:host="bsdk-clubs.onrender.com" android:pathPrefix="/club/join" />
+                <data android:scheme="https" android:host="bsdk-clubs.onrender.com" android:pathPrefix="/invite" />
+            </intent-filter>
+
+            <!-- Custom URI scheme: bsdkclubs://club/join/* and bsdkclubs://invite/* -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bsdkclubs" />
+            </intent-filter>
+
         </activity>
 
         <provider
