@@ -17,6 +17,7 @@ import { GroupInfoDrawer } from './components/GroupInfoDrawer.jsx';
 import { ClubsPane } from './components/ClubsPane.jsx';
 import { UpdatesPane } from './components/UpdatesPane.jsx';
 import { CallsPane } from './components/CallsPane.jsx';
+import { CallScreen } from './components/CallScreen.jsx';
 import { SettingsPane } from './components/SettingsPane.jsx';
 import { CreateClubModal, AliasModal, ReportModal, CameraSnapModal } from './components/Modals.jsx';
 import { NewChatModal } from './components/NewChatModal.jsx';
@@ -85,6 +86,7 @@ export default function App() {
   const [pendingClubInvite, setPendingClubInvite] = useState(null);
   const [toast, setToast] = useState('');
   const [sessionRevoked, setSessionRevoked] = useState(false);
+  const [activeCallSession, setActiveCallSession] = useState(null);
 
   const socketRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -370,6 +372,22 @@ export default function App() {
       });
     });
 
+    socket.on('call:incoming', (incomingData) => {
+      const incomingSession = {
+        mode: 'incoming',
+        callType: incomingData.call_type || 'voice',
+        roomId: incomingData.room_id,
+        peer: !incomingData.is_group ? {
+          id: incomingData.caller_id,
+          name: incomingData.caller_name || 'Caller',
+          photo_url: incomingData.caller_avatar
+        } : null,
+        club: incomingData.is_group ? (clubsRef.current?.find((c) => c.id === incomingData.club_id) || { id: incomingData.club_id, name: 'Club Voice Call' }) : null,
+        isGroup: Boolean(incomingData.is_group)
+      };
+      setActiveCallSession(incomingSession);
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -419,6 +437,51 @@ export default function App() {
     setActiveClubId(null);
     setShowSettings(false);
     setShowGroupInfo(false);
+  }
+
+  async function handleStartCall(target, callType = 'voice', isGroup = false) {
+    if (!auth?.access_token) return;
+    try {
+      const res = await apiRequest('/calls/token', {
+        method: 'POST',
+        body: JSON.stringify({
+          callee_id: !isGroup ? (target?.id || target?.user_id) : undefined,
+          club_id: isGroup ? target?.id : undefined,
+          call_type: callType
+        })
+      });
+
+      if (!res || !res.token) {
+        showToast(res?.error?.message || 'Could not initiate call.');
+        return;
+      }
+
+      const session = {
+        mode: 'outgoing',
+        callType,
+        roomId: res.room_id,
+        token: res.token,
+        peer: !isGroup ? target : null,
+        club: isGroup ? target : null,
+        isGroup
+      };
+
+      setActiveCallSession(session);
+
+      socketRef.current?.emit('call:initiate', {
+        room_id: res.room_id,
+        to_user_id: !isGroup ? (target?.id || target?.user_id) : null,
+        club_id: isGroup ? target?.id : null,
+        call_type: callType,
+        caller_name: auth.user.real_name || 'Contact',
+        caller_avatar: auth.user.profile_photo_url,
+        caller_alias: isGroup ? (target?.my_alias || 'Member') : null,
+        caller_alias_color: isGroup ? (target?.my_alias_color || '#128C7E') : null
+      });
+    } catch (err) {
+      console.error('[Start Call Error]', err);
+      showToast(err?.message || 'Failed to start call.');
+    }
   }
 
   async function handleUpdateSettings(patch) {
@@ -762,7 +825,10 @@ export default function App() {
           )}
 
           {activeTab === 'calls' && (
-            <CallsPane onGoToChats={() => setActiveTab('chats')} />
+            <CallsPane
+              onGoToChats={() => setActiveTab('chats')}
+              onStartCall={handleStartCall}
+            />
           )}
         </div>
 
@@ -862,6 +928,7 @@ export default function App() {
             onEmitTyping={(clubId, isTyping) => {
               socketRef.current?.emit('typing', { club_id: clubId, is_typing: isTyping });
             }}
+            onStartCall={handleStartCall}
             onToast={showToast}
           />
         ) : (
@@ -989,6 +1056,19 @@ export default function App() {
             setActiveClubId(joinedClub.id);
             setActiveTab('chats');
             showToast(`Joined ${joinedClub.name}!`);
+          }}
+        />
+      )}
+
+      {/* ================= SECURE WHATSAPP-STYLE CALLING SCREEN ================= */}
+      {activeCallSession && (
+        <CallScreen
+          callSession={activeCallSession}
+          currentUser={auth?.user}
+          socket={socketRef.current}
+          onEndCall={({ duration, status }) => {
+            setActiveCallSession(null);
+            if (activeClubId) loadMessages(activeClubId);
           }}
         />
       )}

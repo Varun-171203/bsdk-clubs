@@ -28,6 +28,7 @@ import { createContactsRouter } from './modules/contacts.routes.js';
 import { createKeysRouter } from './modules/keys.routes.js';
 import { createInvitesRouter } from './modules/invites.routes.js';
 import { createE2EEMessagesRouter } from './modules/e2ee-messages.routes.js';
+import { createCallsRouter } from './modules/calls.routes.js';
 import { setupSocketGateway } from './realtime/socket.js';
 import { startExpiryJob } from './jobs/expiry.job.js';
 
@@ -73,6 +74,7 @@ export function createApp({ dbPath } = {}) {
   app.use('/api/v1', createKeysRouter(db, requireAuth));
   app.use('/api/v1', createInvitesRouter(db, requireAuth));
   app.use('/api/v1', createE2EEMessagesRouter(db, requireAuth, io));
+  app.use('/api/v1', createCallsRouter(db, requireAuth, io));
 
   // Setup realtime WebSocket gateway
   setupSocketGateway(io, db);

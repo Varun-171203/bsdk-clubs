@@ -368,6 +368,23 @@ export function initDatabase(dbPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_invite_track_hash ON invite_tracking(phone_hash);
     CREATE INDEX IF NOT EXISTS idx_invite_track_inviter ON invite_tracking(inviter_id);
+
+    CREATE TABLE IF NOT EXISTS call_logs (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      caller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      callee_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      club_id TEXT REFERENCES clubs(id) ON DELETE CASCADE,
+      call_type TEXT NOT NULL CHECK (call_type IN ('voice', 'video')),
+      is_group INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK (status IN ('completed', 'missed', 'declined', 'busy')),
+      duration_seconds INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_call_logs_caller ON call_logs(caller_id);
+    CREATE INDEX IF NOT EXISTS idx_call_logs_callee ON call_logs(callee_id);
+    CREATE INDEX IF NOT EXISTS idx_call_logs_club ON call_logs(club_id);
+    CREATE INDEX IF NOT EXISTS idx_call_logs_created ON call_logs(created_at DESC);
   `);
 
   // Migrate columns for existing SQLite DBs

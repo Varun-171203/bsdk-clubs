@@ -259,6 +259,110 @@ export function setupSocketGateway(io, db) {
     });
 
     // ========================================================================
+    // Secure WhatsApp-Style Realtime Calling Signaling
+    // ========================================================================
+    socket.on('call:initiate', (payload = {}) => {
+      const {
+        room_id,
+        to_user_id,
+        club_id,
+        call_type = 'voice',
+        caller_name = 'Caller',
+        caller_avatar = null,
+        caller_alias = null,
+        caller_alias_color = null
+      } = payload;
+
+      if (!room_id) return;
+      socket.join(`call_room:${room_id}`);
+
+      if (to_user_id) {
+        // Direct 1-to-1 call
+        io.to(`user:${to_user_id}`).emit('call:incoming', {
+          room_id,
+          caller_id: userId,
+          caller_name,
+          caller_avatar,
+          call_type,
+          is_group: false
+        });
+      } else if (club_id) {
+        // Group Club voice-only call (shows alias only!)
+        socket.to(`club:${club_id}`).emit('call:incoming', {
+          room_id,
+          club_id,
+          caller_id: userId,
+          caller_alias,
+          caller_alias_color,
+          call_type: 'voice',
+          is_group: true
+        });
+      }
+    });
+
+    socket.on('call:join_room', ({ room_id, alias_name, alias_color, is_video } = {}) => {
+      if (!room_id) return;
+      socket.join(`call_room:${room_id}`);
+      socket.to(`call_room:${room_id}`).emit('call:user_joined', {
+        user_id: userId,
+        socket_id: socket.id,
+        alias_name: alias_name || 'Member',
+        alias_color: alias_color || '#128C7E',
+        is_video: Boolean(is_video)
+      });
+    });
+
+    socket.on('call:answer', ({ room_id, to_user_id } = {}) => {
+      if (!room_id) return;
+      socket.join(`call_room:${room_id}`);
+      if (to_user_id) {
+        io.to(`user:${to_user_id}`).emit('call:answered', { room_id, respondent_id: userId });
+      } else {
+        socket.to(`call_room:${room_id}`).emit('call:answered', { room_id, respondent_id: userId });
+      }
+    });
+
+    socket.on('call:reject', ({ room_id, to_user_id, reason = 'declined' } = {}) => {
+      if (!room_id) return;
+      if (to_user_id) {
+        io.to(`user:${to_user_id}`).emit('call:rejected', { room_id, reason, user_id: userId });
+      }
+      socket.to(`call_room:${room_id}`).emit('call:rejected', { room_id, reason, user_id: userId });
+    });
+
+    socket.on('call:signal', ({ room_id, to_socket_id, to_user_id, signal } = {}) => {
+      if (!room_id || !signal) return;
+      if (to_socket_id) {
+        io.to(to_socket_id).emit('call:signal', {
+          from_socket_id: socket.id,
+          from_user_id: userId,
+          room_id,
+          signal
+        });
+      } else if (to_user_id) {
+        io.to(`user:${to_user_id}`).emit('call:signal', {
+          from_socket_id: socket.id,
+          from_user_id: userId,
+          room_id,
+          signal
+        });
+      } else {
+        socket.to(`call_room:${room_id}`).emit('call:signal', {
+          from_socket_id: socket.id,
+          from_user_id: userId,
+          room_id,
+          signal
+        });
+      }
+    });
+
+    socket.on('call:leave', ({ room_id } = {}) => {
+      if (!room_id) return;
+      socket.leave(`call_room:${room_id}`);
+      socket.to(`call_room:${room_id}`).emit('call:user_left', { user_id: userId, socket_id: socket.id });
+    });
+
+    // ========================================================================
     // Disconnect: update last_seen
     // ========================================================================
     socket.on('disconnect', () => {

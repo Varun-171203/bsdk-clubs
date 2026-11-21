@@ -23,6 +23,7 @@ export function DirectChatWindow({
   currentUser,
   socket,
   onBackMobile,
+  onStartCall,
   onToast
 }) {
   const [messages, setMessages] = useState([]);
@@ -433,6 +434,10 @@ export function DirectChatWindow({
 
   // Start Call (Audio or Video)
   function startCall(callType) {
+    if (onStartCall) {
+      onStartCall(peer, callType, false);
+      return;
+    }
     setActiveCall({ type: callType, status: 'ringing' });
     setCallDuration(0);
     setTimeout(() => {

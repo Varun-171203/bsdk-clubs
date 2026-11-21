@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Search, MoreVertical, Smile, Paperclip, Camera, Mic, Send,
   Check, CheckCheck, Clock, Reply, Copy, Flag, Trash2, X, BarChart2,
-  Edit3, Info, Ban, Sparkles, Lock, AlertCircle
+  Edit3, Info, Ban, Sparkles, Lock, AlertCircle, Phone
 } from 'lucide-react';
 import { apiRequest, formatTime, formatDisappearingLabel, resolveMediaUrl } from '../api.js';
 import { CameraSnapModal, CreatePollModal } from './Modals.jsx';
@@ -52,6 +52,7 @@ export function ChatWindow({
   onPollCreated,
   onOpenReport,
   onEmitTyping,
+  onStartCall,
   onToast
 }) {
   const [text, setText] = useState('');
@@ -204,6 +205,14 @@ export function ChatWindow({
         </div>
 
         <div className="header-actions" style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Club Voice Call (Max 8)"
+            onClick={() => onStartCall && onStartCall(club, 'voice', true)}
+          >
+            <Phone size={19} />
+          </button>
           <button
             type="button"
             className="icon-btn"

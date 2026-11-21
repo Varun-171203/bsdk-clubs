@@ -10,7 +10,7 @@ import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    private static final int CAMERA_PERMISSION_CODE = 1001;
+    private static final int CALL_PERMISSIONS_CODE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -22,14 +22,35 @@ public class MainActivity extends BridgeActivity {
             window.setStatusBarColor(Color.parseColor("#075E54"));
         }
 
-        // Request Camera permission for in-app live snaps (gallery upload disabled by design)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{Manifest.permission.CAMERA},
-                    CAMERA_PERMISSION_CODE
+        // Allow app to turn on screen and show over lockscreen for incoming WhatsApp calls
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        } else {
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             );
+        }
+
+        // Request Camera and Microphone permissions for WhatsApp-style Calling & Snaps
+        String[] requiredPermissions = new String[]{
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS
+        };
+
+        boolean needsRequest = false;
+        for (String perm : requiredPermissions) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                needsRequest = true;
+                break;
+            }
+        }
+
+        if (needsRequest) {
+            ActivityCompat.requestPermissions(this, requiredPermissions, CALL_PERMISSIONS_CODE);
         }
     }
 
