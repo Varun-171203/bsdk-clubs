@@ -84,6 +84,8 @@ export function createMessagesRouter(db, requireAuth, io) {
     const formatted = {
       id: row.id,
       club_id: row.club_id,
+      sender_club_member_id: String(row.sender_member_id),
+      client_message_id: row.client_message_id || null,
       alias_name: row.alias_name,
       alias_color: row.alias_color,
       type: row.type,
@@ -100,7 +102,7 @@ export function createMessagesRouter(db, requireAuth, io) {
       created_at: row.created_at,
       expires_at: row.expires_at,
       deleted_at: row.deleted_at,
-      is_mine: Boolean(myMemberId && row.sender_member_id === myMemberId)
+      is_mine: Boolean(myMemberId && String(row.sender_member_id) === String(myMemberId))
     };
 
     return assertNoIdentityLeak(formatted);
@@ -122,7 +124,7 @@ export function createMessagesRouter(db, requireAuth, io) {
     const blockedIds = db.prepare('SELECT blocked_user_id FROM blocks WHERE blocker_user_id = ?').all(req.user.id).map((b) => b.blocked_user_id);
 
     let query = `
-      SELECT m.id, m.club_id, m.sender_member_id, m.type, m.body, m.media_url, m.reply_to_id,
+      SELECT m.id, m.club_id, m.sender_member_id, m.client_message_id, m.type, m.body, m.media_url, m.reply_to_id,
              m.expires_at, m.created_at, m.deleted_at,
              cm.alias_name, cm.alias_color, cm.user_id as _filter_uid
       FROM messages m
@@ -169,7 +171,7 @@ export function createMessagesRouter(db, requireAuth, io) {
       return sendError(res, 403, 'MUTED', `Admin ne tumhe mute kiya hua hai (${new Date(membership.muted_until).toLocaleString()} tak).`);
     }
 
-    const { type = 'text', body = '', media_url = null, reply_to_id = null } = req.body || {};
+    const { type = 'text', body = '', media_url = null, reply_to_id = null, client_message_id = null } = req.body || {};
     if (!['text', 'image'].includes(type)) {
       return sendError(res, 400, 'VALIDATION', 'Invalid message type.');
     }
@@ -190,9 +192,9 @@ export function createMessagesRouter(db, requireAuth, io) {
 
     const msgId = uuidv4();
     db.prepare(`
-      INSERT INTO messages (id, club_id, sender_member_id, type, body, media_url, reply_to_id, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(msgId, req.params.id, membership.id, type, cleanBody.slice(0, 4000), media_url, reply_to_id || null, expiresAt, nowIso);
+      INSERT INTO messages (id, club_id, sender_member_id, client_message_id, type, body, media_url, reply_to_id, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(msgId, req.params.id, membership.id, client_message_id ? String(client_message_id).slice(0, 100) : null, type, cleanBody.slice(0, 4000), media_url, reply_to_id || null, expiresAt, nowIso);
 
     const inserted = db.prepare(`
       SELECT m.*, cm.alias_name, cm.alias_color
@@ -202,9 +204,10 @@ export function createMessagesRouter(db, requireAuth, io) {
 
     const clientMsg = formatMessage(inserted, membership.id);
 
-    // Broadcast strictly anonymous payload to club room (is_mine: false for others)
+    // Broadcast strictly anonymous payload to club room
+    // sender_club_member_id is included so each client evaluates is_mine correctly!
     if (io) {
-      const broadcastMsg = assertNoIdentityLeak({ ...clientMsg, is_mine: false });
+      const broadcastMsg = assertNoIdentityLeak({ ...clientMsg });
       io.to(`club:${req.params.id}`).emit('message.new', {
         club_id: req.params.id,
         message: broadcastMsg
@@ -314,7 +317,7 @@ export function createMessagesRouter(db, requireAuth, io) {
       return sendError(res, 403, 'MUTED', 'Admin ne tumhe mute kiya hua hai.');
     }
 
-    const { question, options, multi_choice = false } = req.body || {};
+    const { question, options, multi_choice = false, client_message_id = null } = req.body || {};
     const cleanQ = String(question || '').trim();
     const cleanOpts = Array.isArray(options)
       ? options.map((o) => String(o || '').trim()).filter(Boolean)
@@ -338,9 +341,9 @@ export function createMessagesRouter(db, requireAuth, io) {
     const pollId = uuidv4();
 
     db.prepare(`
-      INSERT INTO messages (id, club_id, sender_member_id, type, body, expires_at, created_at)
-      VALUES (?, ?, ?, 'poll', ?, ?, ?)
-    `).run(msgId, req.params.id, membership.id, cleanQ, expiresAt, nowIso);
+      INSERT INTO messages (id, club_id, sender_member_id, client_message_id, type, body, expires_at, created_at)
+      VALUES (?, ?, ?, ?, 'poll', ?, ?, ?)
+    `).run(msgId, req.params.id, membership.id, client_message_id ? String(client_message_id).slice(0, 100) : null, cleanQ, expiresAt, nowIso);
 
     db.prepare('INSERT INTO polls (id, message_id, question, multi_choice) VALUES (?, ?, ?, ?)')
       .run(pollId, msgId, cleanQ, multi_choice ? 1 : 0);
@@ -360,7 +363,7 @@ export function createMessagesRouter(db, requireAuth, io) {
     if (io) {
       io.to(`club:${req.params.id}`).emit('message.new', {
         club_id: req.params.id,
-        message: assertNoIdentityLeak({ ...clientMsg, is_mine: false })
+        message: assertNoIdentityLeak({ ...clientMsg })
       });
     }
 

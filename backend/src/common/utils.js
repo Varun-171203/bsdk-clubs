@@ -115,9 +115,11 @@ export function sendError(res, status, code, message) {
 }
 
 // STRICT PRIVACY GUARD:
-// Chat & WebSocket payloads MUST NEVER include user_id, phone, email, real_name, or sender_member_id
+// Chat & WebSocket payloads MUST NEVER include user_id, phone, email, real_name, or password_hash.
+// sender_club_member_id is explicitly allowed: it is a random per-club membership UUID that preserves anonymity
+// and allows client-side ownership evaluation without exposing user identity.
 const FORBIDDEN_CHAT_KEYS = new Set([
-  'user_id', 'sender_user_id', 'sender_member_id', 'real_name', 'phone', 'email', 'password_hash'
+  'user_id', 'sender_user_id', 'real_name', 'phone', 'email', 'password_hash'
 ]);
 
 export function assertNoIdentityLeak(payload) {

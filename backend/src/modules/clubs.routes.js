@@ -73,6 +73,7 @@ export function createClubsRouter(db, requireAuth, io) {
       club: {
         ...club,
         member_count: 1,
+        my_member_id: memberId,
         my_alias: alias_name,
         my_alias_color: alias_color,
         my_role: 'admin'
@@ -169,6 +170,7 @@ export function createClubsRouter(db, requireAuth, io) {
         already_member: true,
         club: {
           ...club,
+          my_member_id: existing.id,
           my_alias: existing.alias_name,
           my_alias_color: existing.alias_color,
           my_role: existing.role,
@@ -223,6 +225,7 @@ export function createClubsRouter(db, requireAuth, io) {
       already_member: false,
       club: {
         ...club,
+        my_member_id: memberId,
         my_alias: alias_name,
         my_alias_color: alias_color,
         my_role: 'member',

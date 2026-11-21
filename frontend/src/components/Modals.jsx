@@ -247,11 +247,17 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
     }
     setLoading(true);
     try {
+      const clientMessageId = `cmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       const data = await apiRequest(`/clubs/${clubId}/polls`, {
         method: 'POST',
-        body: { question: question.trim(), options: validOpts, multi_choice: multiChoice }
+        body: {
+          question: question.trim(),
+          options: validOpts,
+          multi_choice: multiChoice,
+          client_message_id: clientMessageId
+        }
       });
-      onCreated(data.message);
+      onCreated({ ...data.message, is_mine: true, client_message_id: clientMessageId });
       onClose();
     } catch (err) {
       setError(err.message);

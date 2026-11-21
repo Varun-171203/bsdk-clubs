@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Search, MoreVertical, Smile, Paperclip, Camera, Mic, Send,
   Check, CheckCheck, Clock, Reply, Copy, Flag, Trash2, X, BarChart2,
-  Edit3, Info, Ban, Sparkles, Lock
+  Edit3, Info, Ban, Sparkles, Lock, AlertCircle
 } from 'lucide-react';
 import { apiRequest, formatTime, formatDisappearingLabel, resolveMediaUrl } from '../api.js';
 import { CameraSnapModal, CreatePollModal } from './Modals.jsx';
@@ -14,6 +14,28 @@ const EMOJI_LIST = [
   '💀', '🥳', '🤯', '🙏', '💯', '🚀', '🍕', '🍜',
   '☕', '🎉', '🤔', '😈', '👻', '🦊', '🐼', '⚡'
 ];
+
+/**
+ * SINGLE UNIFIED isMine RULE
+ * Evaluates message ownership across all paths (optimistic, WebSocket broadcast, HTTP, DB reload)
+ * without leaking real identity.
+ */
+export function isMessageMine(msg, club) {
+  if (!msg) return false;
+  // 1. Check explicit per-club member id (authoritative & anonymous)
+  if (club?.my_member_id && msg.sender_club_member_id) {
+    return String(msg.sender_club_member_id) === String(club.my_member_id);
+  }
+  // 2. Check is_mine property from server formatMessage
+  if (typeof msg.is_mine === 'boolean' && msg.is_mine) {
+    return true;
+  }
+  // 3. Fallback: match by unique club alias (each club enforces UNIQUE(club_id, alias_name))
+  if (club?.my_alias && msg.alias_name && club.my_alias === msg.alias_name) {
+    return true;
+  }
+  return false;
+}
 
 export function ChatWindow({
   club,
@@ -45,10 +67,34 @@ export function ChatWindow({
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
   const bottomRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const prevCountRef = useRef(messages.length);
   const typingTimerRef = useRef(null);
 
+  // Track scroll position: only auto-scroll if user is already near bottom or sending own message
+  function handleScroll() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceToBottom < 120;
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const lastMsg = messages[messages.length - 1];
+    const isMyMessage = lastMsg && isMessageMine(lastMsg, club);
+    const isFirstLoad = prevCountRef.current === 0;
+
+    // Only scroll smoothly if:
+    // 1. Initial chat open (auto scroll without animation)
+    // 2. User themselves sent a message (always scroll to show own message)
+    // 3. User is already at/near the bottom when a peer message arrives
+    if (isFirstLoad) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+    } else if (isMyMessage || isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevCountRef.current = messages.length;
   }, [messages.length, club?.id]);
 
   // Reset local composer state when switching clubs
@@ -57,6 +103,8 @@ export function ChatWindow({
     setShowSearch(false);
     setSearchQuery('');
     setOpenMenuMsgId(null);
+    isNearBottomRef.current = true;
+    prevCountRef.current = 0;
   }, [club?.id]);
 
   if (!club) return null;
@@ -102,7 +150,8 @@ export function ChatWindow({
   }
 
   function canDeleteForEveryone(msg) {
-    if (!msg.is_mine || msg.deleted_at) return false;
+    const isMine = isMessageMine(msg, club);
+    if (!isMine || msg.deleted_at) return false;
     return Date.now() - new Date(msg.created_at).getTime() <= 60 * 60 * 1000;
   }
 
@@ -178,7 +227,7 @@ export function ChatWindow({
       )}
 
       {/* Messages Stream */}
-      <div className="messages-scroll chat-wallpaper">
+      <div className="messages-scroll chat-wallpaper" ref={scrollContainerRef} onScroll={handleScroll}>
         {/* Top Anonymity Trust Pill */}
         <div className="system-pill">
           <Sparkles size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 5 }} />
@@ -208,15 +257,15 @@ export function ChatWindow({
         {filteredMessages.map((msg) => {
           if (msg.type === 'system') {
             return (
-              <div key={msg.id} className="system-pill">
+              <div key={msg.client_message_id || msg.id} className="system-pill">
                 {msg.body}
               </div>
             );
           }
 
-          const isOwn = Boolean(msg.is_mine);
+          const isOwn = isMessageMine(msg, club);
           return (
-            <div key={msg.id} className={`msg-row ${isOwn ? 'own' : 'other'}`}>
+            <div key={msg.client_message_id || msg.id} className={`msg-row ${isOwn ? 'own' : 'other'}`}>
               <div className="msg-bubble">
                 {/* Alias Header + Action Menu Trigger */}
                 <div className="msg-alias-line">
@@ -314,7 +363,11 @@ export function ChatWindow({
                 <div className="msg-meta">
                   <span>{formatTime(msg.created_at)}</span>
                   {isOwn && !msg.deleted_at && (
-                    msg.read_count > 0 ? (
+                    msg.status === 'sending' ? (
+                      <Clock size={12} color="#8696a0" title="Sending..." />
+                    ) : msg.status === 'failed' ? (
+                      <AlertCircle size={12} color="#ef4444" title="Failed to send" />
+                    ) : msg.read_count > 0 ? (
                       <CheckCheck size={14} color="#34D399" title="Seen" />
                     ) : (
                       <Check size={14} title="Sent" />

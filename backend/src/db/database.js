@@ -102,6 +102,7 @@ export function initDatabase(dbPath) {
       id TEXT PRIMARY KEY,
       club_id TEXT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
       sender_member_id TEXT NOT NULL REFERENCES club_members(id) ON DELETE CASCADE,
+      client_message_id TEXT,
       type TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text', 'image', 'poll', 'system')),
       body TEXT DEFAULT '',
       media_url TEXT,
@@ -111,6 +112,7 @@ export function initDatabase(dbPath) {
       deleted_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_messages_club_created ON messages(club_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messages_client_id ON messages(client_message_id);
 
     CREATE TABLE IF NOT EXISTS message_reactions (
       id TEXT PRIMARY KEY,
@@ -301,6 +303,8 @@ export function initDatabase(dbPath) {
   `);
 
   // Migrate columns for existing SQLite DBs
+  try { db.exec('ALTER TABLE messages ADD COLUMN client_message_id TEXT;'); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_messages_client_id ON messages(client_message_id);'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN country_code TEXT DEFAULT "+91";'); } catch {}
   try { db.exec('ALTER TABLE users ADD COLUMN phone_e164 TEXT;'); } catch {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_phone_e164 ON users(phone_e164);'); } catch {}

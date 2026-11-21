@@ -12,7 +12,7 @@ import { App as CapApp } from '@capacitor/app';
 import { BrandLogo } from './components/BrandLogo.jsx';
 import { WhatsAppAuthFlow } from './components/WhatsAppAuthFlow.jsx';
 import { ChatListPane } from './components/ChatListPane.jsx';
-import { ChatWindow } from './components/ChatWindow.jsx';
+import { ChatWindow, isMessageMine } from './components/ChatWindow.jsx';
 import { GroupInfoDrawer } from './components/GroupInfoDrawer.jsx';
 import { ClubsPane } from './components/ClubsPane.jsx';
 import { UpdatesPane } from './components/UpdatesPane.jsx';
@@ -88,6 +88,10 @@ export default function App() {
 
   const socketRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const clubsRef = useRef(clubs);
+  clubsRef.current = clubs;
+  const activeClubIdRef = useRef(activeClubId);
+  activeClubIdRef.current = activeClubId;
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -255,10 +259,60 @@ export default function App() {
     socket.on('message.new', ({ club_id, message }) => {
       setMessagesByClub((prev) => {
         const list = prev[club_id] || [];
-        if (list.some((m) => m.id === message.id)) return prev;
-        return { ...prev, [club_id]: [...list, message] };
+        const currentClub = clubsRef.current?.find((c) => c.id === club_id);
+        const isMine = isMessageMine(message, currentClub);
+        const normalizedMsg = { ...message, is_mine: isMine, status: 'sent' };
+
+        // 1. Deduplicate by client_message_id first (sent optimistically)
+        if (message.client_message_id) {
+          const idx = list.findIndex(
+            (m) => m.client_message_id === message.client_message_id || m.id === message.client_message_id
+          );
+          if (idx !== -1) {
+            const updated = [...list];
+            updated[idx] = {
+              ...list[idx],
+              ...normalizedMsg,
+              is_mine: true, // Keep sender's own message on the right
+              status: 'sent'
+            };
+            return { ...prev, [club_id]: updated };
+          }
+        }
+
+        // 2. Deduplicate by server message id
+        const idIdx = list.findIndex((m) => m.id === message.id);
+        if (idIdx !== -1) {
+          const updated = [...list];
+          updated[idIdx] = {
+            ...list[idIdx],
+            ...normalizedMsg,
+            is_mine: list[idIdx].is_mine || isMine
+          };
+          return { ...prev, [club_id]: updated };
+        }
+
+        // 3. New message arrival: append cleanly without full list re-render
+        return { ...prev, [club_id]: [...list, normalizedMsg] };
       });
-      loadClubs();
+
+      // Update club metadata locally without full HTTP reload & flicker
+      setClubs((prev) =>
+        prev.map((c) => {
+          if (c.id !== club_id) return c;
+          const isMine = isMessageMine(message, c);
+          const isCurrentActive = activeClubIdRef.current === club_id;
+          return {
+            ...c,
+            last_message: {
+              body: message.type === 'poll' ? '📊 Poll' : message.body,
+              alias_name: message.alias_name,
+              created_at: message.created_at
+            },
+            unread_count: isCurrentActive || isMine ? 0 : (c.unread_count || 0) + 1
+          };
+        })
+      );
     });
 
     socket.on('message.deleted', ({ club_id, message_id, deleted_at }) => {
@@ -387,19 +441,88 @@ export default function App() {
 
   async function handleSendMessage({ type, body, media_url, reply_to_id }) {
     if (!activeClubId) return;
+    const currentClub = clubsRef.current?.find((c) => c.id === activeClubId);
+    const clientMessageId = `cmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    const optimisticMsg = {
+      id: clientMessageId,
+      client_message_id: clientMessageId,
+      club_id: activeClubId,
+      sender_club_member_id: currentClub?.my_member_id || null,
+      alias_name: currentClub?.my_alias || 'You',
+      alias_color: currentClub?.my_alias_color || '#128C7E',
+      type,
+      body,
+      media_url,
+      reply_to_id: reply_to_id || null,
+      reply_to: null,
+      reactions: [],
+      poll: null,
+      created_at: new Date().toISOString(),
+      is_mine: true,
+      status: 'sending'
+    };
+
+    // 1. Instantly append on the right in green (#D9FDD3)
+    setMessagesByClub((prev) => {
+      const list = prev[activeClubId] || [];
+      return { ...prev, [activeClubId]: [...list, optimisticMsg] };
+    });
+
+    // 2. Update last message in club list locally without HTTP refetch
+    setClubs((prev) =>
+      prev.map((c) =>
+        c.id === activeClubId
+          ? {
+              ...c,
+              last_message: {
+                body,
+                alias_name: currentClub?.my_alias || 'You',
+                created_at: optimisticMsg.created_at
+              }
+            }
+          : c
+      )
+    );
+
     try {
       const data = await apiRequest(`/clubs/${activeClubId}/messages`, {
         method: 'POST',
-        body: { type, body, media_url, reply_to_id }
+        body: { type, body, media_url, reply_to_id, client_message_id: clientMessageId }
       });
+
+      // 3. Reconcile optimistic item with server confirmation (keep is_mine: true, never jump to left)
       setMessagesByClub((prev) => {
         const list = prev[activeClubId] || [];
-        if (list.some((m) => m.id === data.message.id)) return prev;
-        return { ...prev, [activeClubId]: [...list, data.message] };
+        const idx = list.findIndex(
+          (m) => m.client_message_id === clientMessageId || m.id === clientMessageId || m.id === data.message.id
+        );
+        if (idx !== -1) {
+          const updated = [...list];
+          updated[idx] = {
+            ...list[idx],
+            ...data.message,
+            is_mine: true,
+            status: 'sent'
+          };
+          return { ...prev, [activeClubId]: updated };
+        }
+        return {
+          ...prev,
+          [activeClubId]: [...list, { ...data.message, is_mine: true, status: 'sent' }]
+        };
       });
-      loadClubs();
     } catch (err) {
-      showToast(err.message);
+      showToast(err.message || 'Failed to send message');
+      setMessagesByClub((prev) => {
+        const list = prev[activeClubId] || [];
+        return {
+          ...prev,
+          [activeClubId]: list.map((m) =>
+            m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m
+          )
+        };
+      });
     }
   }
 
@@ -412,8 +535,14 @@ export default function App() {
           m.id === msgId ? { ...m, body: 'This message was deleted', media_url: null, deleted_at: data.deleted_at } : m
         )
       }));
+      setClubs((prev) =>
+        prev.map((c) =>
+          c.id === activeClubId && c.last_message
+            ? { ...c, last_message: { ...c.last_message, body: 'This message was deleted' } }
+            : c
+        )
+      );
       showToast('Message sabke liye delete ho gaya.');
-      loadClubs();
     } catch (err) {
       showToast(err.message);
     }
@@ -711,9 +840,22 @@ export default function App() {
             onPollCreated={(pollMsg) => {
               setMessagesByClub((prev) => ({
                 ...prev,
-                [activeClub.id]: [...(prev[activeClub.id] || []), pollMsg]
+                [activeClub.id]: [...(prev[activeClub.id] || []), { ...pollMsg, is_mine: true, status: 'sent' }]
               }));
-              loadClubs();
+              setClubs((prev) =>
+                prev.map((c) =>
+                  c.id === activeClub.id
+                    ? {
+                        ...c,
+                        last_message: {
+                          body: '📊 Poll',
+                          alias_name: activeClub.my_alias || 'You',
+                          created_at: pollMsg.created_at
+                        }
+                      }
+                    : c
+                )
+              );
               showToast('Anonymous poll posted!');
             }}
             onOpenReport={(target) => setReportTarget(target)}
