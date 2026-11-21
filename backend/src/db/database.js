@@ -18,6 +18,74 @@ export function initDatabase(dbPath) {
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
 
+  // Automatic Migration for Legacy SQLite Databases:
+  // Adds any missing columns before table/index declarations to prevent 'no such column' errors
+  try {
+    const hasUsers = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if (hasUsers) {
+      const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+      if (!cols.includes('country_code')) {
+        db.exec("ALTER TABLE users ADD COLUMN country_code TEXT DEFAULT '+91';");
+      }
+      if (!cols.includes('phone')) {
+        db.exec('ALTER TABLE users ADD COLUMN phone TEXT;');
+      }
+      if (!cols.includes('phone_e164')) {
+        db.exec('ALTER TABLE users ADD COLUMN phone_e164 TEXT;');
+      }
+      if (!cols.includes('phone_hash')) {
+        db.exec('ALTER TABLE users ADD COLUMN phone_hash TEXT;');
+      }
+      if (!cols.includes('is_registered')) {
+        db.exec('ALTER TABLE users ADD COLUMN is_registered INTEGER NOT NULL DEFAULT 1;');
+      }
+      if (!cols.includes('two_step_pin_hash')) {
+        db.exec('ALTER TABLE users ADD COLUMN two_step_pin_hash TEXT;');
+      }
+      if (!cols.includes('last_seen')) {
+        db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT;');
+      }
+      if (!cols.includes('delete_requested_at')) {
+        db.exec('ALTER TABLE users ADD COLUMN delete_requested_at TEXT;');
+      }
+
+      try {
+        db.exec(`
+          UPDATE users SET
+            phone_e164 = COALESCE(phone_e164, CASE WHEN phone LIKE '+%' THEN phone ELSE '+91' || phone END),
+            country_code = COALESCE(country_code, '+91')
+          WHERE phone_e164 IS NULL AND phone IS NOT NULL;
+        `);
+      } catch {}
+    }
+
+    const hasMessages = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'").get();
+    if (hasMessages) {
+      const mCols = db.prepare('PRAGMA table_info(messages)').all().map((c) => c.name);
+      if (!mCols.includes('client_message_id')) {
+        db.exec('ALTER TABLE messages ADD COLUMN client_message_id TEXT;');
+      }
+    }
+
+    const hasClubs = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='clubs'").get();
+    if (hasClubs) {
+      const cCols = db.prepare('PRAGMA table_info(clubs)').all().map((c) => c.name);
+      if (!cCols.includes('disappearing_seconds')) {
+        db.exec('ALTER TABLE clubs ADD COLUMN disappearing_seconds INTEGER NOT NULL DEFAULT 604800;');
+      }
+    }
+
+    const hasMembers = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='club_members'").get();
+    if (hasMembers) {
+      const memCols = db.prepare('PRAGMA table_info(club_members)').all().map((c) => c.name);
+      if (!memCols.includes('muted_until')) {
+        db.exec('ALTER TABLE club_members ADD COLUMN muted_until TEXT;');
+      }
+    }
+  } catch (migErr) {
+    console.warn('[DB Migration Warning]', migErr);
+  }
+
   // Create tables matching Section 5 Database Schema + WhatsApp Phone/OTP & Session Management
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
