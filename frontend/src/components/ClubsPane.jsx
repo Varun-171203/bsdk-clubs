@@ -54,7 +54,7 @@ export function ClubsPane({
           </button>
         </form>
         <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-          Join karne se pehle tumhe club ke real members dikhenge — pasand aaye to accept karo!
+          You can review the real members of the club before deciding to join.
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export function ClubsPane({
         {clubs.length === 0 ? (
           <div className="empty-state-center">
             <Users size={38} color="#128C7E" />
-            <div>Abhi kisi club mein nahi ho.</div>
+            <div>You have not joined any clubs yet.</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

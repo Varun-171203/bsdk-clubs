@@ -73,7 +73,7 @@ export function MobileAuthScreen({ onAuthenticated }) {
           authRequired: false,
           body: { identifier: userId.trim() }
         });
-        setInfoMsg(data.message || 'Recovery link bhej diya gaya hai.');
+        setInfoMsg(data.message || 'Recovery link sent.');
       }
     } catch (err) {
       setError(err.message || 'Login failed. Check server connection.');
@@ -120,7 +120,7 @@ export function MobileAuthScreen({ onAuthenticated }) {
             <div className="mobile-brand-title">
               BSDK <span className="green-accent">Clubs</span>
             </div>
-            <div className="mobile-brand-sub">Real dost. Anonymous bakcodi.</div>
+            <div className="mobile-brand-sub">Real Friends. Anonymous Fun.</div>
           </div>
         </div>
 
@@ -246,7 +246,7 @@ export function MobileAuthScreen({ onAuthenticated }) {
 
                 <div className="mobile-trust-badge">
                   <Shield size={14} color="#128C7E" />
-                  <span>Real naam sirf <strong>Group Info</strong> mein dikhega. Chat ke andar anonymous alias rahega.</span>
+                  <span>Real name is visible only in <strong>Group Info</strong>. Chat displays your anonymous alias.</span>
                 </div>
 
                 <div className="mobile-field">
@@ -311,7 +311,7 @@ export function MobileAuthScreen({ onAuthenticated }) {
                 className="mobile-link-btn"
                 onClick={() => { setMode('forgot'); setError(''); setInfoMsg(''); }}
               >
-                Password bhool gaye? Recover karo
+                Forgot password? Recover account
               </button>
             )}
             {mode === 'forgot' && (
@@ -367,7 +367,7 @@ export function MobileAuthScreen({ onAuthenticated }) {
             </div>
 
             <p style={{ fontSize: 13, color: '#667781', marginBottom: 12 }}>
-              Phone APK ko connect karne ke liye apne backend server ka URL set karo:
+              Configure backend server connection URL for Android APK:
             </p>
 
             <div className="mobile-field" style={{ marginBottom: 12 }}>

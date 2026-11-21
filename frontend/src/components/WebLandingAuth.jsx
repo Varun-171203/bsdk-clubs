@@ -8,22 +8,22 @@ const SLIDES = [
     key: 'familiar',
     title: 'Familiar Chat',
     icon: MessageSquare,
-    heading: 'WhatsApp jaisa familiar UI — bina seekhe start karo',
-    desc: 'Chat list, green/white bubbles, reply-quote, reactions, polls, group-wise Status aur familiar Settings structure. Zero learning curve.'
+    heading: 'Familiar WhatsApp-like UI — start without learning curve',
+    desc: 'Chat list, green and white bubbles, reply quote, reactions, polls, and group-wise Status. Zero learning curve.'
   },
   {
     key: 'alias',
     title: 'Anonymous Alias',
     icon: Sparkles,
-    heading: 'Har club mein ek alag, weird aur fun display name',
-    desc: 'Chat ke andar sirf tumhara temporary alias dikhta hai (jaise SilentFox_42 ya GhostByte_07). Kabhi bhi badlo, har group mein alag naam!'
+    heading: 'A unique, anonymous alias in every club',
+    desc: 'Inside chat you are represented by a temporary alias. Change it anytime, with a distinct alias in each group!'
   },
   {
     key: 'trusted',
     title: 'Trusted Groups',
     icon: ShieldCheck,
-    heading: 'Strangers nahi — Group Info mein sab real dost visible',
-    desc: 'Group Info mein real naam + photo dikhta hai taaki trust rahe. Chat mein kaun kya bol raha hai — ye kisi ko nahi pata. Your Gang. Your Bang.'
+    heading: 'No strangers — real friends visible in Group Info',
+    desc: 'Group Info displays real names and photos for authentic trust. In chat, identities remain anonymous. Your Gang. Your Bang.'
   }
 ];
 
@@ -128,7 +128,7 @@ export function WebLandingAuth({ onAuthenticated }) {
           <BrandLogo size={38} />
           <div>
             <div>BSDK <span style={{ color: '#25D366' }}>Clubs</span></div>
-            <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>Real dost. Anonymous bakcodi.</div>
+            <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>Real Friends. Anonymous Fun.</div>
           </div>
         </div>
         <div className="auth-badge-row">
@@ -150,8 +150,8 @@ export function WebLandingAuth({ onAuthenticated }) {
               <span>Your Bang.</span>
             </h1>
             <p className="auth-hero-sub" style={{ marginTop: 12 }}>
-              WhatsApp like hood app — <strong>Their phone is their host.</strong> Group Info mein real dost dikhte hain,
-              lekin chat ke andar kaun kya bhej raha hai, ye kisi ko nahi pata.
+              WhatsApp-style private groups — <strong>Their phone is their host.</strong> Real friends are visible in Group Info,
+              but inside the chat everyone speaks through anonymous aliases.
             </p>
           </div>
 
@@ -167,21 +167,21 @@ export function WebLandingAuth({ onAuthenticated }) {
             <div className="auth-demo-body">
               <div className="demo-bubble other">
                 <div className="demo-bubble-alias" style={{ color: '#34D399' }}>SilentFox_42</div>
-                <div>aaj ka plan confirm?</div>
+                <div>is the plan confirmed for today?</div>
                 <div className="demo-bubble-time">9:41 PM</div>
               </div>
               <div className="demo-bubble own">
                 <div className="demo-bubble-alias" style={{ color: '#A7F3D0' }}>GhostByte_07 (You)</div>
-                <div>haan, 10 baje milte hain</div>
+                <div>yes, let's meet at 10</div>
                 <div className="demo-bubble-time">9:42 PM ✓✓</div>
               </div>
               <div className="demo-bubble other">
                 <div className="demo-bubble-alias" style={{ color: '#F472B6' }}>PixelPanda_19</div>
-                <div>poll daal diya hai, vote karo</div>
+                <div>created a poll, please vote</div>
                 <div className="demo-bubble-time">9:43 PM</div>
               </div>
               <div style={{ fontSize: 11.5, color: '#8696A0', textAlign: 'center', paddingTop: 4 }}>
-                Real naam chat mein hidden — sirf group alias dikhta hai.
+                Real names are hidden inside chat — only group aliases are shown.
               </div>
             </div>
           </div>
@@ -288,20 +288,20 @@ export function WebLandingAuth({ onAuthenticated }) {
                   />
                 </div>
                 <div className="trust-note" style={{ marginBottom: 14 }}>
-                  <strong>Privacy Note:</strong> Ye real naam sirf <strong>Group Info</strong> mein dikhega taaki doston ko trust rahe — chat mein kabhi nahi!
+                  <strong>Privacy Note:</strong> Your real name is shown only in <strong>Group Info</strong> for mutual trust — never inside the chat!
                 </div>
                 <div className="field-group">
                   <label className="field-label">Recovery Phone / Email (optional)</label>
                   <input
                     className="text-input"
                     type="text"
-                    placeholder="Password recovery ke liye"
+                    placeholder="For password recovery"
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
                   />
                 </div>
                 <div className="field-group">
-                  <label className="field-label">Choose Profile Avatar (Group Info ke liye)</label>
+                  <label className="field-label">Choose Profile Avatar (for Group Info)</label>
                   <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                     {AVATAR_PRESETS.map((url) => (
                       <button
@@ -335,7 +335,7 @@ export function WebLandingAuth({ onAuthenticated }) {
                 style={{ fontSize: 13, color: '#128C7E', fontWeight: 600 }}
                 onClick={() => { setMode('forgot'); setError(''); setInfoMsg(''); }}
               >
-                Password bhool gaye? Recover karo
+                Forgot password? Recover account
               </button>
             )}
             {mode === 'forgot' && (
@@ -356,7 +356,7 @@ export function WebLandingAuth({ onAuthenticated }) {
               Instant Demo Gang Login (password: <code>bsdk1234</code>)
             </div>
             <p style={{ fontSize: 11.5, color: '#667781', marginTop: 3 }}>
-              2 alag tabs mein alag dost login karke live anonymous chat test karo!
+              Log in with different demo accounts in two tabs to test live anonymous chat!
             </p>
             <div className="demo-chip-list">
               {DEMO_ACCOUNTS.map((acc) => (
@@ -408,7 +408,7 @@ export function WebLandingAuth({ onAuthenticated }) {
                   </button>
                 </div>
                 <div style={{ fontSize: 11, color: '#667781', marginTop: 4 }}>
-                  Phone APK ke liye apne PC ka IP (<code>http://10.103.158.228:4000</code>) ya deployed backend URL daalo. Emulator ke liye: <code>http://10.0.2.2:4000</code>.
+                  For phone APK, enter your deployed backend URL (e.g. <code>https://bsdk-clubs.onrender.com</code>). For emulator: <code>http://10.0.2.2:4000</code>.
                 </div>
               </div>
             )}

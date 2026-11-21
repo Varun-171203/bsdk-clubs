@@ -33,7 +33,7 @@ export function CameraSnapModal({ title = 'Take Live Snap', onClose, onCapture }
       setCameraError('');
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error('Camera API available nahi hai is browser mein.');
+          throw new Error('Camera API is not available in this browser.');
         }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode, width: { ideal: 720 }, height: { ideal: 720 } },
@@ -49,7 +49,7 @@ export function CameraSnapModal({ title = 'Take Live Snap', onClose, onCapture }
         }
       } catch {
         if (active) {
-          setCameraError('Webcam detect nahi hua — tum live Snap Studio card click karke test snap bhej sakte ho (gallery upload band hai).');
+          setCameraError('Camera not detected. You can click a test snap from Snap Studio (gallery upload disabled).');
         }
       }
     }
@@ -127,7 +127,7 @@ export function CameraSnapModal({ title = 'Take Live Snap', onClose, onCapture }
         </div>
 
         <div className="trust-note" style={{ marginBottom: 12 }}>
-          <strong>In-App Camera Only:</strong> Gallery se upload band hai taaki sab kuch live aur asli rahe!
+          <strong>In-App Camera Only:</strong> Gallery uploads are disabled to keep all media authentic and live.
         </div>
 
         <canvas ref={canvasRef} style={{ display: 'none' }} />
@@ -195,7 +195,7 @@ export function CameraSnapModal({ title = 'Take Live Snap', onClose, onCapture }
             <div className="field-group">
               <input
                 className="text-input"
-                placeholder="Caption add karo (optional)..."
+                placeholder="Add a caption (optional)..."
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
               />
@@ -277,7 +277,7 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
         </div>
 
         <div className="trust-note" style={{ marginBottom: 14 }}>
-          Kisne poll banaya aur kisne kya vote diya — ye kabhi kisi ko nahi dikhega!
+          Poll creator and voter selections are completely anonymous. No one can see who voted for what.
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -287,7 +287,7 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
             <label className="field-label">Question</label>
             <input
               className="text-input"
-              placeholder="e.g. Weekend trip kahan chalein?"
+              placeholder="e.g. Where should we go this weekend?"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               required
@@ -398,7 +398,7 @@ export function AliasModal({ club, onClose, onUpdated }) {
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
-          Sirf <strong>{club.name}</strong> ke liye apna weird/fun naam rakho. Baaki clubs mein tumhara alias alag rahega!
+          Choose your display name for <strong>{club.name}</strong>. Your alias will be different in other clubs.
         </p>
 
         {error && <div className="error-banner">{error}</div>}
@@ -406,7 +406,7 @@ export function AliasModal({ club, onClose, onUpdated }) {
         <div style={{ padding: 12, borderRadius: 12, background: 'var(--bg-chat)', marginBottom: 14 }}>
           <div className="msg-bubble" style={{ background: 'var(--bubble-other)', maxWidth: 260 }}>
             <div className="msg-alias" style={{ color }}>{alias || 'YourAlias_07'}</div>
-            <div style={{ fontSize: 13.5 }}>Aise dikhega tumhara naam chat mein!</div>
+            <div style={{ fontSize: 13.5 }}>This is how your name appears in chat</div>
           </div>
         </div>
 
@@ -504,7 +504,7 @@ export function CreateClubModal({ onClose, onCreated }) {
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 17 }}>
-            <Users size={20} color="#128C7E" /> {createdClub ? 'Club Ready Hai! 🎉' : 'Create New Club'}
+            <Users size={20} color="#128C7E" /> {createdClub ? 'Club Created! 🎉' : 'Create New Club'}
           </div>
           <button className="icon-btn dark-hover" onClick={onClose}><X size={19} /></button>
         </div>
@@ -545,7 +545,7 @@ export function CreateClubModal({ onClose, onCreated }) {
               <textarea
                 className="text-input"
                 rows={2}
-                placeholder="Is gang ka scene kya hai?"
+                placeholder="What is this club about?"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -571,13 +571,13 @@ export function CreateClubModal({ onClose, onCreated }) {
             <img src={createdClub.photo_url} alt={createdClub.name} className="avatar-circle avatar-lg" />
             <div style={{ fontWeight: 800, fontSize: 18 }}>{createdClub.name}</div>
             <div className="trust-note" style={{ width: '100%' }}>
-              Tumhara alias is club mein: <strong style={{ color: createdClub.my_alias_color }}>{createdClub.my_alias}</strong>
+              Your alias in this club: <strong style={{ color: createdClub.my_alias_color }}>{createdClub.my_alias}</strong>
             </div>
             <div style={{ padding: 14, background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
               <QRCodeSVG value={`bsdkclubs://join/${createdClub.invite_code}`} size={136} fgColor="#075E54" />
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Gang incomplete hai — 4-5 doston ko ye Invite Code bhejo:
+              Share this invite code with your friends:
             </div>
             <div style={{ display: 'flex', gap: 8, width: '100%' }}>
               <input className="text-input" readOnly value={createdClub.invite_code} style={{ textAlign: 'center', fontWeight: 800, letterSpacing: '0.1em' }} />
@@ -623,7 +623,7 @@ export function JoinPreviewModal({ inviteCode, previewData, onClose, onJoined })
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <div style={{ fontWeight: 700, fontSize: 17 }}>Join karne se pehle dekho 👀</div>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>Preview Club Before Joining</div>
           <button className="icon-btn dark-hover" onClick={onClose}><X size={19} /></button>
         </div>
 
@@ -639,7 +639,7 @@ export function JoinPreviewModal({ inviteCode, previewData, onClose, onJoined })
         </div>
 
         <div className="trust-note" style={{ marginBottom: 12 }}>
-          Join karte hi tumhe ek unique temporary display name milega — chat mein real naam nahi dikhega.
+          Upon joining, you will receive a unique anonymous alias. Your real name will not be shown in chat.
         </div>
 
         <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-secondary)' }}>
@@ -727,7 +727,7 @@ export function ReportModal({ target, onClose, onSubmitted }) {
         </div>
 
         <div className="trust-note" style={{ marginBottom: 14 }}>
-          Tumhari identity reporter ke roop mein hidden rahegi. Anonymous ka matlab unaccountable nahi hai.
+          Your identity as a reporter remains confidential. Anonymity does not mean unaccountability.
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -813,7 +813,7 @@ export function MediaGalleryModal({ clubName, messages, onClose }) {
         </div>
         {mediaMsgs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-secondary)' }}>
-            Abhi tak koi live camera snap share nahi hua hai.
+            No live camera snaps have been shared yet.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>

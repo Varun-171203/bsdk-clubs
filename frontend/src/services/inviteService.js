@@ -665,11 +665,11 @@ export function recordReminder(phone, method = 'whatsapp') {
  * Resolves personal or club code -> previews inviter or club
  */
 export async function resolveInviteCode(code, apiRequest) {
-  if (!code) throw new Error('Invite code daalo.');
+  if (!code) throw new Error('Please enter an invite code.');
   const upper = String(code).trim().toUpperCase();
 
   if (isCodeRevoked(upper)) {
-    throw new Error('Ye invite code reset ya revoke ho chuka hai.');
+    throw new Error('This invite code has been reset or revoked.');
   }
 
   if (typeof apiRequest === 'function') {
@@ -685,7 +685,7 @@ export async function resolveInviteCode(code, apiRequest) {
         const invData = await apiRequest(`/invites/preview/${encodeURIComponent(upper)}`);
         if (invData) return invData;
       } catch (err2) {
-        throw new Error(err2.message || 'Ye invite code invalid ya expire ho chuka hai.');
+        throw new Error(err2.message || 'This invite code is invalid or expired.');
       }
     }
   }

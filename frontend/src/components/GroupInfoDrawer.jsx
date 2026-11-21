@@ -67,7 +67,7 @@ export function GroupInfoDrawer({
 
   async function handleChangeDisappearing(seconds) {
     if (!isAdmin) {
-      onToast('Sirf Club Admin disappearing timer change kar sakta hai.');
+      onToast('Only club admins can change the disappearing messages timer.');
       return;
     }
     try {
@@ -86,7 +86,7 @@ export function GroupInfoDrawer({
     try {
       const data = await apiRequest(`/clubs/${club.id}/reset-invite`, { method: 'POST' });
       onClubUpdated({ ...club, invite_code: data.invite_code });
-      onToast(`Naya invite code generate ho gaya: ${data.invite_code}`);
+      onToast(`New invite code generated: ${data.invite_code}`);
     } catch (err) {
       onToast(err.message);
     }
@@ -101,31 +101,31 @@ export function GroupInfoDrawer({
           method: 'PATCH',
           body: { role: nextRole }
         });
-        onToast(`${member.real_name} ab ${nextRole} hai.`);
+        onToast(`${member.real_name} is now ${nextRole}.`);
         loadMembers();
       } else if (action === 'mute-24h') {
         await apiRequest(`/clubs/${club.id}/members/${member.user_id}`, {
           method: 'PATCH',
           body: { mute_minutes: 1440 }
         });
-        onToast(`${member.real_name} 24 hours ke liye mute ho gaya.`);
+        onToast(`${member.real_name} has been muted for 24 hours.`);
         loadMembers();
       } else if (action === 'unmute') {
         await apiRequest(`/clubs/${club.id}/members/${member.user_id}`, {
           method: 'PATCH',
           body: { mute_minutes: 0 }
         });
-        onToast(`${member.real_name} unmute ho gaya.`);
+        onToast(`${member.real_name} has been unmuted.`);
         loadMembers();
       } else if (action === 'remove') {
-        if (!window.confirm(`${member.real_name} ko ${club.name} se remove karein?`)) return;
+        if (!window.confirm(`Remove ${member.real_name} from ${club.name}?`)) return;
         await apiRequest(`/clubs/${club.id}/members/${member.user_id}`, { method: 'DELETE' });
-        onToast(`${member.real_name} club se remove ho gaya.`);
+        onToast(`${member.real_name} was removed from the club.`);
         loadMembers();
         onClubUpdated({ ...club, member_count: Math.max(1, club.member_count - 1) });
       } else if (action === 'block') {
         await apiRequest('/blocks', { method: 'POST', body: { blocked_user_id: member.user_id } });
-        onToast(`${member.real_name} block ho gaya. Unka content ab hide rahega.`);
+        onToast(`${member.real_name} blocked. Their content is now hidden.`);
       } else if (action === 'report') {
         onOpenReport({
           club_id: club.id,
@@ -191,8 +191,9 @@ export function GroupInfoDrawer({
           {/* My Alias Strip */}
           <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: 'var(--bg-panel-alt)' }}>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Your anonymous alias here</div>
-              <div style={{ fontWeight: 700, color: club.my_alias_color }}>{club.my_alias}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                Your name in this Club: <strong style={{ color: club.my_alias_color }}>{club.my_alias}</strong>
+              </div>
             </div>
             <button type="button" className="btn-secondary" onClick={onOpenAliasModal}>
               <Edit3 size={14} /> Change
@@ -203,7 +204,7 @@ export function GroupInfoDrawer({
         {/* Anonymity Trust Note Strip (Section 3.5.3) */}
         <div className="drawer-section">
           <div className="trust-note">
-            <strong>Trust + Anonymity Rule:</strong> {anonymityNote || 'Chat mein sab anonymous hain. Kaun sa message kisne bheja, ye members ko nahi dikhta.'}
+            <strong>Trust + Anonymity Rule:</strong> {anonymityNote || 'Everyone in this chat is anonymous. Members cannot see who sent which message.'}
           </div>
         </div>
 
@@ -380,7 +381,7 @@ export function GroupInfoDrawer({
       {showQr && (
         <QrModal
           title={`Invite to ${club.name}`}
-          subtitle="Doston ko ye QR scan karwao ya invite code share karo (Group Info mein sab real dost dikhenge)."
+          subtitle="Scan this QR code or share the invite code to join."
           value={`bsdkclubs://join/${club.invite_code}`}
           codeLabel={club.invite_code}
           onClose={() => setShowQr(false)}

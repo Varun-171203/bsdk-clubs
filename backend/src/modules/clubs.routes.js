@@ -25,7 +25,7 @@ export function createClubsRouter(db, requireAuth, io) {
     const { name, description, photo_url, disappearing_seconds } = req.body || {};
     const cleanName = String(name || '').trim();
     if (!cleanName || cleanName.length < 2 || cleanName.length > 80) {
-      return sendError(res, 400, 'VALIDATION', 'Club ka naam 2-80 characters ka hona chahiye.');
+      return sendError(res, 400, 'VALIDATION', 'Club name must be between 2 and 80 characters.');
     }
 
     const allowedDisappearing = [0, 86400, 604800];
@@ -63,7 +63,7 @@ export function createClubsRouter(db, requireAuth, io) {
       uuidv4(),
       clubId,
       memberId,
-      `Club "${cleanName}" bana diya gaya hai! Chat mein sab anonymous aliases se bolenge.`,
+      `Club "${cleanName}" was created. Everyone here chats with an anonymous name.`,
       now,
       disp > 0 ? new Date(Date.now() + disp * 1000).toISOString() : null
     );
@@ -180,7 +180,7 @@ export function createClubsRouter(db, requireAuth, io) {
     }
 
     if (existingMembers.length >= MAX_CLUB_MEMBERS) {
-      return sendError(res, 400, 'CLUB_FULL', `Ye club full hai (max ${MAX_CLUB_MEMBERS} members).`);
+      return sendError(res, 400, 'CLUB_FULL', `This club is full (maximum ${MAX_CLUB_MEMBERS} members).`);
     }
 
     const existingAliases = new Set(existingMembers.map((m) => m.alias_name));
@@ -207,7 +207,7 @@ export function createClubsRouter(db, requireAuth, io) {
       sysMsgId,
       club.id,
       memberId,
-      `${alias_name} joined the club! Group Info mein real members dekh sakte ho.`,
+      `${alias_name} joined the club.`,
       now,
       disp > 0 ? new Date(Date.now() + disp * 1000).toISOString() : null
     );
@@ -273,7 +273,7 @@ export function createClubsRouter(db, requireAuth, io) {
     const rawCode = String(req.body?.invite_code || '').trim();
     const code = rawCode.replace(/^.*\/club\/join\//i, '').replace(/^bsdk:invite:/i, '').trim().toUpperCase();
     if (!code) {
-      return sendError(res, 400, 'VALIDATION', 'Invite code daalo.');
+      return sendError(res, 400, 'VALIDATION', 'Please enter an invite code.');
     }
 
     const revoked = db.prepare('SELECT id, revoked_at FROM invites WHERE UPPER(code) = ? AND revoked_at IS NOT NULL').get(code);
@@ -283,7 +283,7 @@ export function createClubsRouter(db, requireAuth, io) {
 
     const club = db.prepare('SELECT * FROM clubs WHERE UPPER(invite_code) = ?').get(code);
     if (!club) {
-      return sendError(res, 404, 'NOT_FOUND', 'Invite code galat hai ya admin ne reset kar diya hai.');
+      return sendError(res, 404, 'NOT_FOUND', 'Invalid or expired invite code.');
     }
 
     return handleClubJoin(club, req.user.id, res);
@@ -293,7 +293,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.post('/clubs/:id/join', requireAuth, (req, res) => {
     const club = db.prepare('SELECT * FROM clubs WHERE id = ?').get(req.params.id);
     if (!club) {
-      return sendError(res, 404, 'NOT_FOUND', 'Club nahi mila.');
+      return sendError(res, 404, 'NOT_FOUND', 'Club not found.');
     }
     return handleClubJoin(club, req.user.id, res);
   });
@@ -302,7 +302,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.get('/clubs/:id', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
     const club = db.prepare('SELECT * FROM clubs WHERE id = ?').get(req.params.id);
     const count = db.prepare('SELECT COUNT(*) as c FROM club_members WHERE club_id = ?').get(req.params.id).c;
@@ -326,10 +326,10 @@ export function createClubsRouter(db, requireAuth, io) {
   router.patch('/clubs/:id', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership || membership.role !== 'admin') {
-      return sendError(res, 403, 'ADMIN_ONLY', 'Sirf Club Admin ye setting badal sakta hai.');
+      return sendError(res, 403, 'ADMIN_ONLY', 'Only club admins can change this setting.');
     }
     const club = db.prepare('SELECT * FROM clubs WHERE id = ?').get(req.params.id);
-    if (!club) return sendError(res, 404, 'NOT_FOUND', 'Club nahi mila.');
+    if (!club) return sendError(res, 404, 'NOT_FOUND', 'Club not found.');
 
     const nextName = req.body?.name !== undefined ? String(req.body.name).trim() : club.name;
     const nextDesc = req.body?.description !== undefined ? String(req.body.description).trim().slice(0, 300) : club.description;
@@ -340,7 +340,7 @@ export function createClubsRouter(db, requireAuth, io) {
       : club.disappearing_seconds;
 
     if (!nextName || nextName.length < 2) {
-      return sendError(res, 400, 'VALIDATION', 'Club ka naam kam se kam 2 characters ka hona chahiye.');
+      return sendError(res, 400, 'VALIDATION', 'Club name must be at least 2 characters.');
     }
 
     db.prepare(`
@@ -355,7 +355,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.post('/clubs/:id/reset-invite', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership || membership.role !== 'admin') {
-      return sendError(res, 403, 'ADMIN_ONLY', 'Sirf Admin invite link reset kar sakta hai.');
+      return sendError(res, 403, 'ADMIN_ONLY', 'Only club admins can reset the invite link.');
     }
     const oldClub = db.prepare('SELECT invite_code FROM clubs WHERE id = ?').get(req.params.id);
     const newCode = generateInviteCode();
@@ -382,7 +382,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.get('/clubs/:id/members', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
     const members = db.prepare(`
       SELECT u.id as user_id, u.user_id as handle, u.real_name, u.profile_photo_url, u.about,
@@ -398,7 +398,7 @@ export function createClubsRouter(db, requireAuth, io) {
         ...m,
         is_me: m.user_id === req.user.id
       })),
-      anonymity_note: 'Chat mein sab anonymous hain. Kaun sa message kisne bheja, ye members ko nahi dikhta.'
+      anonymity_note: 'Everyone in this chat is anonymous. Members cannot see who sent which message.'
     });
   });
 
@@ -406,7 +406,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.get('/clubs/:id/my-alias', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
     return res.json({
       alias_name: membership.alias_name,
@@ -419,7 +419,7 @@ export function createClubsRouter(db, requireAuth, io) {
   router.patch('/clubs/:id/my-alias', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
 
     const { alias_name, alias_color, randomize } = req.body || {};
@@ -435,7 +435,7 @@ export function createClubsRouter(db, requireAuth, io) {
       if (alias_name !== undefined) {
         const trimmed = String(alias_name).trim();
         if (!isAliasClean(trimmed)) {
-          return sendError(res, 400, 'INVALID_ALIAS', 'Ye display naam allowed nahi hai. Fun/weird naam rakho (3-28 chars, no offensive words).');
+          return sendError(res, 400, 'INVALID_ALIAS', 'Invalid display name. Please choose a name between 3-28 characters with no offensive words.');
         }
         const collision = db.prepare('SELECT id FROM club_members WHERE club_id = ? AND LOWER(alias_name) = ? AND user_id != ?').get(
           req.params.id,
@@ -443,7 +443,7 @@ export function createClubsRouter(db, requireAuth, io) {
           req.user.id
         );
         if (collision) {
-          return sendError(res, 409, 'ALIAS_TAKEN', 'Is club mein ye alias koi aur use kar raha hai, dusra try karo!');
+          return sendError(res, 409, 'ALIAS_TAKEN', 'This name is already taken in this club. Please choose another.');
         }
         nextAlias = trimmed;
       }
@@ -460,12 +460,12 @@ export function createClubsRouter(db, requireAuth, io) {
   router.patch('/clubs/:id/members/:userId', requireAuth, (req, res) => {
     const myMembership = getMembership(req.params.id, req.user.id);
     if (!myMembership || myMembership.role !== 'admin') {
-      return sendError(res, 403, 'ADMIN_ONLY', 'Sirf Admin members manage kar sakta hai.');
+      return sendError(res, 403, 'ADMIN_ONLY', 'Only club admins can manage members.');
     }
 
     const target = getMembership(req.params.id, req.params.userId);
     if (!target) {
-      return sendError(res, 404, 'NOT_FOUND', 'Member is club mein nahi mila.');
+      return sendError(res, 404, 'NOT_FOUND', 'Member not found in this club.');
     }
 
     const { role, mute_minutes } = req.body || {};
@@ -486,14 +486,14 @@ export function createClubsRouter(db, requireAuth, io) {
   router.delete('/clubs/:id/members/:userId', requireAuth, (req, res) => {
     const myMembership = getMembership(req.params.id, req.user.id);
     if (!myMembership || myMembership.role !== 'admin') {
-      return sendError(res, 403, 'ADMIN_ONLY', 'Sirf Admin kisi member ko remove kar sakta hai.');
+      return sendError(res, 403, 'ADMIN_ONLY', 'Only club admins can remove members.');
     }
     if (req.params.userId === req.user.id) {
-      return sendError(res, 400, 'VALIDATION', 'Khud ko remove karne ke liye Leave Club use karo.');
+      return sendError(res, 400, 'VALIDATION', 'To leave this club, please tap Leave Club.');
     }
     const target = getMembership(req.params.id, req.params.userId);
     if (!target) {
-      return sendError(res, 404, 'NOT_FOUND', 'Member nahi mila.');
+      return sendError(res, 404, 'NOT_FOUND', 'Member not found.');
     }
 
     db.prepare('DELETE FROM club_members WHERE id = ?').run(target.id);
@@ -504,14 +504,14 @@ export function createClubsRouter(db, requireAuth, io) {
         club_id: req.params.id
       });
     }
-    return res.json({ message: 'Member club se remove kar diya gaya hai.' });
+    return res.json({ message: 'Member has been removed from the club.' });
   });
 
   // POST /api/v1/clubs/:id/leave - Leave club
   router.post('/clubs/:id/leave', requireAuth, (req, res) => {
     const myMembership = getMembership(req.params.id, req.user.id);
     if (!myMembership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
 
     db.prepare('DELETE FROM club_members WHERE id = ?').run(myMembership.id);
@@ -526,14 +526,14 @@ export function createClubsRouter(db, requireAuth, io) {
       }
     }
 
-    return res.json({ message: 'Tumne club chhod diya hai.' });
+    return res.json({ message: 'You left the club.' });
   });
 
   // PATCH /api/v1/clubs/:id/prefs - Pin, Mute, Archive club in user's chat list
   router.patch('/clubs/:id/prefs', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
     const existing = db.prepare('SELECT * FROM club_user_prefs WHERE user_id = ? AND club_id = ?').get(req.user.id, req.params.id) || {
       is_pinned: 0,

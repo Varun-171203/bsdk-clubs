@@ -65,6 +65,10 @@ export function ChatWindow({
   const [openMenuMsgId, setOpenMenuMsgId] = useState(null);
   const [lightboxImg, setLightboxImg] = useState(null);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+
+  const noticeKey = `bsdk_club_notice_seen_${club?.id}`;
+  const [showCombinedNotice, setShowCombinedNotice] = useState(() => !localStorage.getItem(noticeKey));
 
   const bottomRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -103,9 +107,30 @@ export function ChatWindow({
     setShowSearch(false);
     setSearchQuery('');
     setOpenMenuMsgId(null);
+    setShowHeaderMenu(false);
     isNearBottomRef.current = true;
     prevCountRef.current = 0;
+    setShowCombinedNotice(!localStorage.getItem(`bsdk_club_notice_seen_${club?.id}`));
   }, [club?.id]);
+
+  function isDifferentDay(d1, d2) {
+    if (!d1 || !d2) return false;
+    const a = new Date(d1);
+    const b = new Date(d2);
+    return a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate();
+  }
+
+  function getDateLabel(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today - msgDate) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 
   if (!club) return null;
 
@@ -159,36 +184,26 @@ export function ChatWindow({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }} onClick={() => { setOpenMenuMsgId(null); setShowAttach(false); }}>
       {/* Chat Header */}
       <header className="chat-header">
-        <div className="header-left" style={{ flex: 1 }}>
+        <div className="header-left" style={{ flex: 1, minWidth: 0 }}>
           <button type="button" className="icon-btn mobile-only" onClick={onBackMobile} title="Back">
             <ArrowLeft size={21} />
           </button>
-          <div className="chat-header-info" onClick={onOpenGroupInfo}>
+          <div className="chat-header-info" onClick={onOpenGroupInfo} style={{ cursor: 'pointer', minWidth: 0, flex: 1 }}>
             <img src={club.photo_url} alt={club.name} className="avatar-circle avatar-sm" />
-            <div style={{ minWidth: 0 }}>
-              <div className="chat-header-title">{club.name}</div>
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <div className="chat-header-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {club.name}
+              </div>
               <div className="chat-header-sub">
                 {typingAliases.length > 0
                   ? `${typingAliases.join(', ')} typing...`
-                  : `${club.member_count} members • aliases on • tap for Group Info`}
+                  : `${club.member_count} members`}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="header-actions">
-          {/* Quick My Alias Pill */}
-          <button
-            type="button"
-            className="my-alias-chip"
-            onClick={onOpenAliasModal}
-            title="Change your display name in this club"
-          >
-            <span className="alias-dot" style={{ background: club.my_alias_color }} />
-            <span>{club.my_alias}</span>
-            <Edit3 size={12} />
-          </button>
-
+        <div className="header-actions" style={{ position: 'relative' }}>
           <button
             type="button"
             className="icon-btn"
@@ -200,11 +215,56 @@ export function ChatWindow({
           <button
             type="button"
             className="icon-btn"
-            title="Group Info (Real Members)"
+            title="Group Info"
             onClick={onOpenGroupInfo}
           >
             <Info size={19} />
           </button>
+          <button
+            type="button"
+            className="icon-btn"
+            title="More options"
+            onClick={(e) => { e.stopPropagation(); setShowHeaderMenu((v) => !v); }}
+          >
+            <MoreVertical size={19} />
+          </button>
+
+          {showHeaderMenu && (
+            <div
+              className="popover-menu"
+              style={{ right: 4, top: 44, width: 200 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="popover-item"
+                onClick={() => { setShowHeaderMenu(false); onOpenAliasModal(); }}
+              >
+                <Edit3 size={15} /> Change my name here
+              </button>
+              <button
+                type="button"
+                className="popover-item"
+                onClick={() => { setShowHeaderMenu(false); onOpenGroupInfo(); }}
+              >
+                <Info size={15} /> Group Info
+              </button>
+              <button
+                type="button"
+                className="popover-item"
+                onClick={() => { setShowHeaderMenu(false); setShowSafetyModal(true); }}
+              >
+                <Lock size={15} /> Verify Encryption
+              </button>
+              <button
+                type="button"
+                className="popover-item"
+                onClick={() => { setShowHeaderMenu(false); setShowSearch(true); }}
+              >
+                <Search size={15} /> Search
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -228,64 +288,100 @@ export function ChatWindow({
 
       {/* Messages Stream */}
       <div className="messages-scroll chat-wallpaper" ref={scrollContainerRef} onScroll={handleScroll}>
-        {/* Top Anonymity Trust Pill */}
-        <div className="system-pill">
-          <Sparkles size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 5 }} />
-          Chat mein sab anonymous hain — yahan tumhara naam{' '}
-          <strong style={{ color: club.my_alias_color }}>{club.my_alias}</strong> hai. Real members{' '}
-          <button
-            type="button"
-            style={{ textDecoration: 'underline', fontWeight: 700, color: 'var(--brand-green)' }}
-            onClick={onOpenGroupInfo}
+        {/* ONE Small Compact One-Time Notice per Club */}
+        {showCombinedNotice && (
+          <div
+            className="system-pill combined-notice-pill"
+            onClick={() => {
+              localStorage.setItem(`bsdk_club_notice_seen_${club.id}`, '1');
+              setShowCombinedNotice(false);
+              onOpenGroupInfo();
+            }}
           >
-            Group Info
-          </button>{' '}
-          mein dekho.
-        </div>
+            🔒 Messages are end-to-end encrypted. In this Club you appear as{' '}
+            <strong style={{ color: club.my_alias_color }}>{club.my_alias}</strong> — members don't know who sent what. Tap for Group Info.
+          </div>
+        )}
 
-        {/* WhatsApp End-to-End Encryption Security Code Pill */}
-        <div
-          className="system-pill"
-          style={{ cursor: 'pointer', background: 'rgba(254, 243, 199, 0.9)', color: '#92400e', border: '1px solid #fde68a' }}
-          onClick={() => setShowSafetyModal(true)}
-          title="Verify 60-digit End-to-End Encryption Safety Code"
-        >
-          <Lock size={12} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 5, color: '#92400e' }} />
-          Messages are end-to-end encrypted with Signal Protocol. Tap to verify security code.
-        </div>
+        {filteredMessages.length === 0 && (
+          <div className="empty-chat-state">
+            <p>Say hello to your gang 👋 — nobody will know it was you.</p>
+          </div>
+        )}
 
-        {filteredMessages.map((msg) => {
+        {filteredMessages.map((msg, idx) => {
+          const prevMsg = idx > 0 ? filteredMessages[idx - 1] : null;
+          const showDateSep = idx === 0 || isDifferentDay(prevMsg?.created_at, msg.created_at);
+
           if (msg.type === 'system') {
             return (
-              <div key={msg.client_message_id || msg.id} className="system-pill">
-                {msg.body}
-              </div>
+              <React.Fragment key={msg.client_message_id || msg.id}>
+                {showDateSep && (
+                  <div className="date-separator">
+                    <span className="date-separator-pill">{getDateLabel(msg.created_at)}</span>
+                  </div>
+                )}
+                <div className="system-pill">
+                  {msg.body}
+                </div>
+              </React.Fragment>
             );
           }
 
           const isOwn = isMessageMine(msg, club);
+          const isFirstInRun =
+            idx === 0 ||
+            showDateSep ||
+            prevMsg?.type === 'system' ||
+            isMessageMine(prevMsg, club) !== isOwn ||
+            prevMsg?.sender_club_member_id !== msg.sender_club_member_id ||
+            prevMsg?.alias_name !== msg.alias_name;
+
           return (
-            <div key={msg.client_message_id || msg.id} className={`msg-row ${isOwn ? 'own' : 'other'}`}>
-              <div className="msg-bubble">
-                {/* Alias Header + Action Menu Trigger */}
-                <div className="msg-alias-line">
-                  <span className="msg-alias" style={{ color: msg.alias_color }}>
-                    {msg.alias_name} {isOwn ? '(You)' : ''}
-                  </span>
-                  {!msg.deleted_at && (
+            <React.Fragment key={msg.client_message_id || msg.id}>
+              {showDateSep && (
+                <div className="date-separator">
+                  <span className="date-separator-pill">{getDateLabel(msg.created_at)}</span>
+                </div>
+              )}
+              <div className={`msg-row ${isOwn ? 'own' : 'other'} ${!isFirstInRun ? 'grouped' : 'first-in-group'}`}>
+                <div className="msg-bubble">
+                  {/* Alias Header: ONLY for other members on first message in run */}
+                  {!isOwn && isFirstInRun && (
+                    <div className="msg-alias-line">
+                      <span className="msg-alias" style={{ color: msg.alias_color }}>
+                        {msg.alias_name}
+                      </span>
+                      {!msg.deleted_at && (
+                        <button
+                          type="button"
+                          className="msg-actions-trigger"
+                          title="Message options"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuMsgId(openMenuMsgId === msg.id ? null : msg.id);
+                          }}
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Floating Action Menu for own message or subsequent messages in run */}
+                  {(isOwn || (!isOwn && !isFirstInRun)) && !msg.deleted_at && (
                     <button
                       type="button"
-                      className="msg-actions-trigger"
+                      className="msg-actions-trigger floating-trigger"
                       title="Message options"
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenMenuMsgId(openMenuMsgId === msg.id ? null : msg.id);
                       }}
                     >
-                      <MoreVertical size={15} />
+                      <MoreVertical size={13} />
                     </button>
                   )}
-                </div>
 
                 {/* Reply Quote Strip */}
                 {msg.reply_to && !msg.deleted_at && (
@@ -469,18 +565,11 @@ export function ChatWindow({
                 </div>
               )}
             </div>
+            </React.Fragment>
           );
         })}
         <div ref={bottomRef} />
       </div>
-
-      {/* Disappearing Messages Strip above Composer (Section 3.5.2) */}
-      {club.disappearing_seconds > 0 && (
-        <div className="disappearing-strip">
-          <Clock size={13} color="#128C7E" />
-          <span>Messages disappear in {formatDisappearingLabel(club.disappearing_seconds)}</span>
-        </div>
-      )}
 
       {/* Composer */}
       <div className="composer-wrap">
@@ -532,14 +621,14 @@ export function ChatWindow({
               <Camera size={16} color="#F472B6" /> Live Camera Snap
             </button>
             <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--text-secondary)', borderTop: '1px solid var(--border)' }}>
-              Gallery upload band hai (camera only)
+              Gallery uploads disabled (camera only)
             </div>
           </div>
         )}
 
         {isMuted ? (
           <div className="trust-note" style={{ textAlign: 'center' }}>
-            Admin ne tumhe is club mein mute kiya hai ({new Date(club.muted_until).toLocaleString()} tak).
+            An admin has muted you in this club until {new Date(club.muted_until).toLocaleString()}.
           </div>
         ) : (
           <form className="composer-row" onSubmit={handleSubmit}>
@@ -563,7 +652,7 @@ export function ChatWindow({
 
             <input
               className="composer-input"
-              placeholder={`Message as ${club.my_alias}...`}
+              placeholder="Message"
               value={text}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -587,8 +676,8 @@ export function ChatWindow({
                 type="button"
                 className="icon-btn dark-hover"
                 style={{ opacity: 0.45, cursor: 'not-allowed' }}
-                title="Voice notes coming in V1.1"
-                onClick={() => onToast('Voice notes V1.1 mein aayenge! Abhi text, polls aur camera snaps use karo.')}
+                title="Voice notes coming soon"
+                onClick={() => onToast('Voice notes coming soon! Use text, polls, and camera photos.')}
               >
                 <Mic size={21} color="var(--text-secondary)" />
               </button>

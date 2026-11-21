@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "node --watch src/server.js",
-    "build": "npm install",
+    "build": "node -e \"if(require('fs').existsSync('../frontend/package.json')){try{require('child_process').execSync('npm --prefix ../frontend install --include=dev && npm --prefix ../frontend run build',{stdio:'inherit'});}catch(e){console.warn('Frontend build skipped:',e.message);}}\" && npm install",
     "start": "node src/server.js",
     "test:privacy": "node tests/privacy.test.js",
     "test:agent4": "node tests/agent4_backend.test.js",

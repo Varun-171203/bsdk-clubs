@@ -242,7 +242,7 @@ export async function apiRequest(path, { method = 'GET', body, authRequired = tr
     });
   } catch {
     throw new Error(
-      `Backend server se connect nahi ho paya (${getServerBaseUrl() || window.location.origin}). Check karo server chal raha hai aur URL sahi hai.`
+      `Could not connect to backend server (${getServerBaseUrl() || window.location.origin}). Please check your internet connection or server status.`
     );
   }
 
@@ -267,7 +267,7 @@ export async function apiRequest(path, { method = 'GET', body, authRequired = tr
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = data?.error?.message || 'Kuch gadbad ho gayi, dobara try karo.';
+    const msg = data?.error?.message || 'Something went wrong, please try again.';
     const err = new Error(msg);
     err.code = data?.error?.code || 'ERROR';
     err.status = res.status;

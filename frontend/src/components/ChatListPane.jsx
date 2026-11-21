@@ -68,14 +68,14 @@ export function ChatListPane({
           <div className="empty-state-center">
             <MessageSquarePlus size={44} color="#128C7E" />
             <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
-              {showArchived ? 'Koi archived club nahi hai' : search ? 'Koi matching club nahi mila' : 'Abhi koi club nahi hai'}
+              {showArchived ? 'No archived clubs' : search ? 'No matching clubs found' : 'No clubs yet'}
             </div>
             <p style={{ fontSize: 13 }}>
-              Apni gang ka private anonymous club banao aur bakcodi start karo!
+              Create a private anonymous club for your group!
             </p>
             {!showArchived && !search && (
               <button type="button" className="btn-primary" onClick={onOpenCreateClub}>
-                <Plus size={17} /> Pehla Club banao
+                <Plus size={17} /> Create your first Club
               </button>
             )}
           </div>

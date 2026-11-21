@@ -75,7 +75,7 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
   // GET /api/v1/clubs/:id/statuses - Club-wise active statuses (alias only)
   router.get('/clubs/:id/statuses', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     const nowIso = new Date().toISOString();
     const rows = db.prepare(`
@@ -112,18 +112,18 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
   // POST /api/v1/clubs/:id/statuses - Post 24h anonymous status for a club
   router.post('/clubs/:id/statuses', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     const { type = 'text', media_url = null, caption = '', bg_color = '#075E54' } = req.body || {};
     if (!['text', 'image'].includes(type)) {
-      return sendError(res, 400, 'VALIDATION', 'Status type text ya image hona chahiye.');
+      return sendError(res, 400, 'VALIDATION', 'Status must be text or image.');
     }
     const cleanCaption = String(caption || '').trim().slice(0, 500);
     if (type === 'text' && !cleanCaption) {
-      return sendError(res, 400, 'VALIDATION', 'Status mein kuch likho ya snap lo.');
+      return sendError(res, 400, 'VALIDATION', 'Status cannot be empty.');
     }
     if (type === 'image' && !media_url) {
-      return sendError(res, 400, 'VALIDATION', 'Camera snap photo missing hai.');
+      return sendError(res, 400, 'VALIDATION', 'Camera photo is required.');
     }
 
     const now = new Date();
@@ -163,9 +163,9 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
   // POST /api/v1/statuses/:id/view - Record anonymous view count
   router.post('/statuses/:id/view', requireAuth, (req, res) => {
     const status = db.prepare('SELECT * FROM statuses WHERE id = ?').get(req.params.id);
-    if (!status) return sendError(res, 404, 'NOT_FOUND', 'Status nahi mila ya expire ho gaya.');
+    if (!status) return sendError(res, 404, 'NOT_FOUND', 'Status not found or expired.');
     const membership = getMembership(status.club_id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     if (status.member_id !== membership.id) {
       db.prepare('INSERT OR IGNORE INTO status_views (status_id, member_id, viewed_at) VALUES (?, ?, ?)')
@@ -179,7 +179,7 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
     const { reported_user_id = null, message_id = null, club_id = null, reason, details = '' } = req.body || {};
     const cleanReason = String(reason || '').trim();
     if (!cleanReason) {
-      return sendError(res, 400, 'VALIDATION', 'Report ka reason select karo.');
+      return sendError(res, 400, 'VALIDATION', 'Please select a reason for reporting.');
     }
 
     // Server-side resolution of reported_user_id from message_id (stored ONLY in moderation table, never returned to reporter!)
@@ -212,7 +212,7 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
         status: 'Under Review',
         created_at: now
       },
-      message: 'Report submit ho gaya hai. Tumhari identity confidential rahegi.'
+      message: 'Report submitted successfully. Your identity remains confidential.'
     });
   });
 
@@ -244,22 +244,22 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
   router.post('/blocks', requireAuth, (req, res) => {
     const { blocked_user_id } = req.body || {};
     if (!blocked_user_id || blocked_user_id === req.user.id) {
-      return sendError(res, 400, 'VALIDATION', 'Valid user select karo.');
+      return sendError(res, 400, 'VALIDATION', 'Please select a valid user.');
     }
     const target = db.prepare('SELECT id FROM users WHERE id = ?').get(blocked_user_id);
-    if (!target) return sendError(res, 404, 'NOT_FOUND', 'User nahi mila.');
+    if (!target) return sendError(res, 404, 'NOT_FOUND', 'User not found.');
 
     db.prepare(`
       INSERT OR IGNORE INTO blocks (id, blocker_user_id, blocked_user_id, created_at) VALUES (?, ?, ?, ?)
     `).run(uuidv4(), req.user.id, blocked_user_id, new Date().toISOString());
 
-    return res.status(201).json({ message: 'User block ho gaya hai. Unka content ab tumhe nahi dikhega.' });
+    return res.status(201).json({ message: 'User blocked. You will no longer see their content.' });
   });
 
   // DELETE /api/v1/blocks/:userId - Unblock user
   router.delete('/blocks/:userId', requireAuth, (req, res) => {
     db.prepare('DELETE FROM blocks WHERE blocker_user_id = ? AND blocked_user_id = ?').run(req.user.id, req.params.userId);
-    return res.json({ message: 'User unblock ho gaya hai.' });
+    return res.json({ message: 'User unblocked.' });
   });
 
   // GET /api/v1/settings - Get user's WhatsApp-style persisted settings
@@ -317,7 +317,7 @@ export function createStatusSafetyRouter(db, requireAuth, io) {
   // POST /api/v1/notifications/token - Register push token
   router.post('/notifications/token', requireAuth, (req, res) => {
     const { fcm_token, device = 'web' } = req.body || {};
-    if (!fcm_token) return sendError(res, 400, 'VALIDATION', 'Token missing hai.');
+    if (!fcm_token) return sendError(res, 400, 'VALIDATION', 'Push notification token is required.');
     db.prepare(`
       INSERT INTO notifications_tokens (id, user_id, fcm_token, device, updated_at) VALUES (?, ?, ?, ?, ?)
     `).run(uuidv4(), req.user.id, String(fcm_token), String(device), new Date().toISOString());

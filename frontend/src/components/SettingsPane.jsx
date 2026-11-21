@@ -110,7 +110,7 @@ export function SettingsPane({
     try {
       await apiRequest(`/blocks/${userId}`, { method: 'DELETE' });
       setBlocks((prev) => prev.filter((b) => b.user_id !== userId));
-      onToast('User unblock ho gaya.');
+      onToast('User unblocked.');
     } catch (err) {
       onToast(err.message);
     }
@@ -126,11 +126,11 @@ export function SettingsPane({
     a.download = `bsdk-clubs-account-${user.user_id}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    onToast('Account info JSON download ho gaya.');
+    onToast('Account info JSON downloaded successfully.');
   }
 
   async function handleDeleteAccount() {
-    if (!window.confirm('Pakka apna BSDK Clubs account delete request submit karna hai? (30-day grace period)')) return;
+    if (!window.confirm('Are you sure you want to request account deletion? (30-day grace period)')) return;
     try {
       const data = await apiRequest('/me', { method: 'DELETE' });
       onToast(data.message);
@@ -219,7 +219,7 @@ export function SettingsPane({
             <div style={{ textAlign: 'center', marginBottom: 18 }}>
               <img src={user.profile_photo_url} alt={user.real_name} className="avatar-circle avatar-xl" style={{ margin: '0 auto 10px' }} />
               <div className="trust-note">
-                Ye real naam aur photo sirf <strong>Group Info</strong> mein dikhega, chat mein kabhi nahi.
+                Your real name and photo are visible only in <strong>Group Info</strong>, never inside the chat.
               </div>
             </div>
             <div className="field-group">
@@ -255,7 +255,7 @@ export function SettingsPane({
             />
             <ToggleRow
               title="Two-step verification (PIN)"
-              subtitle="Extra 6-digit PIN protection apne account ke liye"
+              subtitle="Extra 6-digit PIN protection for your account"
               value={settings.account.two_step_pin_enabled}
               onToggle={() => onUpdateSettings({ account: { two_step_pin_enabled: !settings.account.two_step_pin_enabled } })}
             />
@@ -401,11 +401,11 @@ export function SettingsPane({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 4 }}>
                 <ShieldCheck size={17} /> Who can see my real profile in Group Info: Club Members (Fixed)
               </div>
-              Trust ke liye ye zaroori hai — Group Info mein hamesha real dost dikhte hain taaki koi stranger na ghus sake. Isko off nahi kiya ja sakta.
+              Essential for mutual trust — Group Info displays real friends so no unknown strangers enter. This setting is fixed.
             </div>
 
             <div style={{ padding: 12, borderRadius: 10, background: 'var(--bg-panel-alt)', fontSize: 13 }}>
-              <strong>Show my alias activity:</strong> Koi bhi member kabhi nahi dekh sakta ki tumne poll mein kya vote kiya ya kaun sa anonymous message bheja.
+              <strong>Show my alias activity:</strong> No member can ever see which options you voted for in polls or which messages were sent by you.
             </div>
 
             {['last_seen', 'profile_photo', 'about', 'status_visibility'].map((key) => {
@@ -434,14 +434,14 @@ export function SettingsPane({
 
             <ToggleRow
               title="Read receipts"
-              subtitle="Turn off karoge to dusron ke read receipts bhi nahi dikhenge"
+              subtitle="If turned off, you will not send or see read receipts"
               value={settings.privacy.read_receipts}
               onToggle={() => onUpdateSettings({ privacy: { read_receipts: !settings.privacy.read_receipts } })}
             />
 
             <ToggleRow
               title="Screenshot Block (Android FLAG_SECURE)"
-              subtitle="Optional protection hint — note: dusre phone se photo lena koi app nahi rok sakta"
+              subtitle="Optional protection hint — prevents native in-app screenshots"
               value={settings.privacy.screenshot_block}
               onToggle={() => onUpdateSettings({ privacy: { screenshot_block: !settings.privacy.screenshot_block } })}
             />
@@ -450,7 +450,7 @@ export function SettingsPane({
             <div>
               <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>BLOCKED USERS ({blocks.length})</div>
               {blocks.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Koi blocked user nahi hai.</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No blocked users.</div>
               ) : (
                 blocks.map((b) => (
                   <div key={b.user_id} className="member-row">
@@ -471,7 +471,7 @@ export function SettingsPane({
             <div>
               <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>REPORT HISTORY ({reports.length})</div>
               {reports.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tumne abhi tak koi report submit nahi ki hai.</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>You have not submitted any reports yet.</div>
               ) : (
                 reports.map((r) => (
                   <div key={r.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 8 }}>
@@ -559,20 +559,20 @@ export function SettingsPane({
 
             <ToggleRow
               title="Enter is send"
-              subtitle="Enter key dabane par message turant send hoga"
+              subtitle="Pressing Enter will send your message immediately"
               value={settings.chats.enter_is_send}
               onToggle={() => onUpdateSettings({ chats: { enter_is_send: !settings.chats.enter_is_send } })}
             />
 
             <ToggleRow
               title="Media visibility"
-              subtitle="Chat mein aaye live snaps preview show karo"
+              subtitle="Show live snap previews in chat"
               value={settings.chats.media_visibility}
               onToggle={() => onUpdateSettings({ chats: { media_visibility: !settings.chats.media_visibility } })}
             />
 
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', padding: 10, borderRadius: 10, background: 'var(--bg-panel-alt)' }}>
-              Chat Backup (Local / Cloud) V1.1 update mein aayega.
+              Chat Backup will be available in an upcoming update.
             </div>
           </div>
         )}
@@ -582,25 +582,25 @@ export function SettingsPane({
           <div style={{ maxWidth: 560 }}>
             <ToggleRow
               title="Message notifications"
-              subtitle='Example: "SilentFox_42 ne Hostel Bakcodi mein kuch bheja hai"'
+              subtitle='Example: "SilentFox_42 sent a message in Weekend Gang"'
               value={settings.notifications.message_notifications}
               onToggle={() => onUpdateSettings({ notifications: { message_notifications: !settings.notifications.message_notifications } })}
             />
             <ToggleRow
               title="Group notifications"
-              subtitle="Club invites, polls aur status alerts"
+              subtitle="Club invites, polls, and status updates"
               value={settings.notifications.group_notifications}
               onToggle={() => onUpdateSettings({ notifications: { group_notifications: !settings.notifications.group_notifications } })}
             />
             <ToggleRow
               title="Show message preview"
-              subtitle="OFF karne par notification mein sirf alias + club naam dikhega, text nahi"
+              subtitle="When OFF, notifications display sender alias and club name only"
               value={settings.notifications.show_preview}
               onToggle={() => onUpdateSettings({ notifications: { show_preview: !settings.notifications.show_preview } })}
             />
             <ToggleRow
               title="Reaction notifications"
-              subtitle="Jab koi tumhare message par react kare"
+              subtitle="Notify when someone reacts to your message"
               value={settings.notifications.reaction_notifications}
               onToggle={() => onUpdateSettings({ notifications: { reaction_notifications: !settings.notifications.reaction_notifications } })}
             />
@@ -659,7 +659,7 @@ export function SettingsPane({
               className="btn-secondary"
               onClick={() => {
                 sessionStorage.clear();
-                onToast('Local app cache clear ho gaya!');
+                onToast('Local app cache cleared successfully!');
               }}
             >
               Clear Local Cache
@@ -698,16 +698,16 @@ export function SettingsPane({
 
             {[
               {
-                q: '"Anonymous matlab strangers?"',
-                a: 'Nahi! Group Info mein real members dikhte hain — 4-5 apne hi dost. Anonymous sirf ye hai ki kaun sa message kisne bheja, ye chat mein nahi dikhta.'
+                q: '"Does anonymous mean strangers?"',
+                a: 'No! Group Info displays real members — your real friends. Anonymity only means members do not know who sent which message inside the chat.'
               },
               {
-                q: '"Koi misuse ya abuse kare to?"',
-                a: 'Report, block aur admin moderation hai. Anonymous ka matlab unaccountable nahi — galat harkat par server-side moderation audit log ke through action hota hai.'
+                q: '"What if someone misbehaves?"',
+                a: 'Report, block, and admin moderation are available. Anonymity does not mean unaccountability — moderation logs help handle policy violations.'
               },
               {
-                q: '"Screenshot le liya to?"',
-                a: 'Sach batao: koi bhi app dusre phone se liya gaya photo rok nahi sakta. BSDK Clubs kabhi "screenshot-proof" ka jhootha daava nahi karta — soch-samajh kar bhejo.'
+                q: '"Can someone take a photo of the screen?"',
+                a: 'No software can physically prevent a photo taken by another camera. BSDK Clubs does not make false promises — please chat responsibly.'
               }
             ].map((item) => (
               <div key={item.q} style={{ padding: 12, borderRadius: 12, background: 'var(--bg-panel-alt)' }}>
@@ -728,19 +728,19 @@ export function SettingsPane({
             {legalDoc === 'privacy' && (
               <div style={{ padding: 14, borderRadius: 12, border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.55 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#D97706', fontWeight: 700, marginBottom: 8 }}>
-                  <AlertTriangle size={16} /> Draft Policy (DPDP Act 2023 lawyer review required before store publish)
+                  <AlertTriangle size={16} /> Privacy Policy
                 </div>
-                <p><strong>1. Data Collected:</strong> User ID, real name, profile photo, about, optional phone/email, messages, snaps, polls, statuses, reports & blocks.</p>
-                <p style={{ marginTop: 6 }}><strong>2. Anonymous Alias Meaning:</strong> Chat mein sirf alias dikhta hai, Group Info mein real naam. Server par moderation & legal compliance ke liye mapping securely stored hoti hai — kabhi advertising ke liye nahi bechi jaati.</p>
-                <p style={{ marginTop: 6 }}><strong>3. Retention:</strong> Disappearing messages (24h/7d) server se hard-delete hote hain; Status 24h mein expire hota hai; Account delete par 30 din mein personal data delete/anonymise.</p>
+                <p><strong>1. Data Collected:</strong> User ID, real name, profile photo, about, optional phone/email, messages, snaps, polls, statuses, reports and blocks.</p>
+                <p style={{ marginTop: 6 }}><strong>2. Anonymous Alias:</strong> Inside chat only your per-group alias is shown. Group Info displays your real name to friends. Server data is never sold or used for advertising.</p>
+                <p style={{ marginTop: 6 }}><strong>3. Retention:</strong> Disappearing messages are hard-deleted upon expiry; Status expires in 24h; Deleted accounts undergo standard grace period before purge.</p>
               </div>
             )}
 
             {legalDoc === 'terms' && (
               <div style={{ padding: 14, borderRadius: 12, border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.55 }}>
-                <p><strong>1. Eligibility:</strong> 18+ users only. Ek account per User ID. Group Info mein real naam sahi hona chahiye.</p>
-                <p style={{ marginTop: 6 }}><strong>2. Anonymous Alias Rules:</strong> Harassment, hate speech, threats, illegal content, spam aur doxxing (dusre member ki real identity bina consent bahar expose karna) strictly banned hai.</p>
-                <p style={{ marginTop: 6 }}><strong>3. Disappearing Messages:</strong> App servers aur UI se messages time par delete karta hai, par receiver ke screenshot/camera photo ki guarantee nahi di ja sakti.</p>
+                <p><strong>1. Eligibility:</strong> 18+ users only. One account per User ID. Real names in Group Info must be authentic.</p>
+                <p style={{ marginTop: 6 }}><strong>2. Rules:</strong> Harassment, hate speech, threats, illegal content, spam, and doxxing other members are strictly prohibited.</p>
+                <p style={{ marginTop: 6 }}><strong>3. Disappearing Messages:</strong> Expired messages are deleted from servers and UI upon timer completion.</p>
               </div>
             )}
 
@@ -755,9 +755,9 @@ export function SettingsPane({
         {section === 'invite' && (
           <div style={{ maxWidth: 480, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
             <div style={{ fontSize: 38 }}>🔥</div>
-            <div style={{ fontWeight: 800, fontSize: 19 }}>Gang incomplete hai — 2 dost aur bulao!</div>
+            <div style={{ fontWeight: 800, fontSize: 19 }}>Invite your friends to your gang!</div>
             <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              4-5 college ya hostel doston ke saath BSDK Clubs ka asli mazaa aata hai. WhatsApp ya native SMS se direct invite bhejo!
+              BSDK Clubs is best experienced with your circle of friends. Send an invite directly via WhatsApp or SMS!
             </p>
             <button
               type="button"

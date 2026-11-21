@@ -109,13 +109,13 @@ export function createApp({ dbPath } = {}) {
 
   // Fallback 404 for API
   app.use('/api', (req, res) => {
-    return sendError(res, 404, 'NOT_FOUND', 'API endpoint nahi mila.');
+    return sendError(res, 404, 'NOT_FOUND', 'API endpoint not found.');
   });
 
   // Global error handler
   app.use((err, req, res, _next) => {
     console.error('[API Error]', err);
-    return sendError(res, 500, 'SERVER_ERROR', 'Kuch gadbad ho gayi, thodi der mein try karo.');
+    return sendError(res, 500, 'SERVER_ERROR', 'Something went wrong. Please try again later.');
   });
 
   return { app, server, io, db, expiryTimer };

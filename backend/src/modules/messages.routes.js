@@ -112,7 +112,7 @@ export function createMessagesRouter(db, requireAuth, io) {
   router.get('/clubs/:id/messages', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
 
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
@@ -165,10 +165,10 @@ export function createMessagesRouter(db, requireAuth, io) {
   router.post('/clubs/:id/messages', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
     if (!membership) {
-      return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+      return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     }
     if (isMuted(membership)) {
-      return sendError(res, 403, 'MUTED', `Admin ne tumhe mute kiya hua hai (${new Date(membership.muted_until).toLocaleString()} tak).`);
+      return sendError(res, 403, 'MUTED', `You are muted by the admin until ${new Date(membership.muted_until).toLocaleString()}.`);
     }
 
     const { type = 'text', body = '', media_url = null, reply_to_id = null, client_message_id = null } = req.body || {};
@@ -177,10 +177,10 @@ export function createMessagesRouter(db, requireAuth, io) {
     }
     const cleanBody = String(body || '').trim();
     if (type === 'text' && !cleanBody) {
-      return sendError(res, 400, 'VALIDATION', 'Khali message nahi bhej sakte.');
+      return sendError(res, 400, 'VALIDATION', 'Message cannot be empty.');
     }
     if (type === 'image' && !media_url) {
-      return sendError(res, 400, 'VALIDATION', 'Camera snap missing hai.');
+      return sendError(res, 400, 'VALIDATION', 'Camera photo is required.');
     }
 
     const club = db.prepare('SELECT disappearing_seconds FROM clubs WHERE id = ?').get(req.params.id);
@@ -220,16 +220,16 @@ export function createMessagesRouter(db, requireAuth, io) {
   // DELETE /api/v1/messages/:id - Delete for everyone (own message, 1-hour window)
   router.delete('/messages/:id', requireAuth, (req, res) => {
     const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
-    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message nahi mila.');
+    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message not found.');
 
     const membership = getMembership(msg.club_id, req.user.id);
     if (!membership || msg.sender_member_id !== membership.id) {
-      return sendError(res, 403, 'FORBIDDEN', 'Sirf apna message delete kar sakte ho.');
+      return sendError(res, 403, 'FORBIDDEN', 'You can only delete your own messages.');
     }
 
     const ageMs = Date.now() - new Date(msg.created_at).getTime();
     if (ageMs > ONE_HOUR_MS) {
-      return sendError(res, 400, 'WINDOW_EXPIRED', '1 ghante ke baad delete-for-everyone nahi ho sakta.');
+      return sendError(res, 400, 'WINDOW_EXPIRED', 'Messages can only be deleted for everyone within 1 hour.');
     }
 
     const nowIso = new Date().toISOString();
@@ -245,20 +245,20 @@ export function createMessagesRouter(db, requireAuth, io) {
       });
     }
 
-    return res.json({ message: 'Message sabke liye delete ho gaya.', deleted_at: nowIso });
+    return res.json({ message: 'Message was deleted for everyone.', deleted_at: nowIso });
   });
 
   // POST /api/v1/messages/:id/reactions - Toggle emoji reaction
   router.post('/messages/:id/reactions', requireAuth, (req, res) => {
     const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
-    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message nahi mila.');
+    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message not found.');
 
     const membership = getMembership(msg.club_id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     const emoji = String(req.body?.emoji || '').trim();
     if (!emoji || emoji.length > 16) {
-      return sendError(res, 400, 'VALIDATION', 'Valid emoji chuno.');
+      return sendError(res, 400, 'VALIDATION', 'Please choose a valid emoji.');
     }
 
     const existing = db.prepare('SELECT id FROM message_reactions WHERE message_id = ? AND member_id = ? AND emoji = ?')
@@ -297,9 +297,9 @@ export function createMessagesRouter(db, requireAuth, io) {
   // POST /api/v1/messages/:id/read - Mark read receipt
   router.post('/messages/:id/read', requireAuth, (req, res) => {
     const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
-    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message nahi mila.');
+    if (!msg) return sendError(res, 404, 'NOT_FOUND', 'Message not found.');
     const membership = getMembership(msg.club_id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     db.prepare(`
       INSERT OR IGNORE INTO read_receipts (message_id, member_id, read_at) VALUES (?, ?, ?)
@@ -312,9 +312,9 @@ export function createMessagesRouter(db, requireAuth, io) {
   // POST /api/v1/clubs/:id/polls - Create anonymous poll (2-6 options)
   router.post('/clubs/:id/polls', requireAuth, (req, res) => {
     const membership = getMembership(req.params.id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
     if (isMuted(membership)) {
-      return sendError(res, 403, 'MUTED', 'Admin ne tumhe mute kiya hua hai.');
+      return sendError(res, 403, 'MUTED', 'You have been muted by an admin.');
     }
 
     const { question, options, multi_choice = false, client_message_id = null } = req.body || {};
@@ -324,10 +324,10 @@ export function createMessagesRouter(db, requireAuth, io) {
       : [];
 
     if (!cleanQ || cleanQ.length < 2) {
-      return sendError(res, 400, 'VALIDATION', 'Poll ka sawal likho.');
+      return sendError(res, 400, 'VALIDATION', 'Please enter a poll question.');
     }
     if (cleanOpts.length < 2 || cleanOpts.length > 6) {
-      return sendError(res, 400, 'VALIDATION', 'Poll mein 2 se 6 options hone chahiye.');
+      return sendError(res, 400, 'VALIDATION', 'Poll must have between 2 and 6 options.');
     }
 
     const club = db.prepare('SELECT disappearing_seconds FROM clubs WHERE id = ?').get(req.params.id);
@@ -377,17 +377,17 @@ export function createMessagesRouter(db, requireAuth, io) {
       FROM polls p JOIN messages m ON m.id = p.message_id
       WHERE p.id = ?
     `).get(req.params.id);
-    if (!pollRow) return sendError(res, 404, 'NOT_FOUND', 'Poll nahi mila.');
+    if (!pollRow) return sendError(res, 404, 'NOT_FOUND', 'Poll not found.');
 
     const membership = getMembership(pollRow.club_id, req.user.id);
-    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'Tum is club ke member nahi ho.');
+    if (!membership) return sendError(res, 403, 'NOT_MEMBER', 'You are not a member of this club.');
 
     const optionIds = Array.isArray(req.body?.option_ids) ? req.body.option_ids : [];
     const validOptions = db.prepare('SELECT id FROM poll_options WHERE poll_id = ?').all(pollRow.id).map((o) => o.id);
     const selected = [...new Set(optionIds.filter((id) => validOptions.includes(id)))];
 
     if (!pollRow.multi_choice && selected.length > 1) {
-      return sendError(res, 400, 'VALIDATION', 'Is poll mein sirf ek option choose kar sakte ho.');
+      return sendError(res, 400, 'VALIDATION', 'You can only choose one option in this poll.');
     }
 
     // Replace member's votes cleanly (prevents double voting!)
@@ -443,17 +443,17 @@ export function createMessagesRouter(db, requireAuth, io) {
   router.post('/media/upload/:fileId', requireAuth, (req, res) => {
     const { data_url } = req.body || {};
     if (!data_url || typeof data_url !== 'string') {
-      return sendError(res, 400, 'VALIDATION', 'Camera image data missing hai.');
+      return sendError(res, 400, 'VALIDATION', 'Camera image data is required.');
     }
     const match = data_url.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
     if (!match) {
-      return sendError(res, 400, 'INVALID_FILE', 'Sirf valid JPEG/PNG/WebP camera snap allowed hai.');
+      return sendError(res, 400, 'INVALID_FILE', 'Only JPEG, PNG, or WebP camera photos are allowed.');
     }
 
     const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
     const buffer = Buffer.from(match[2], 'base64');
     if (buffer.length > MAX_MEDIA_BYTES) {
-      return sendError(res, 400, 'FILE_TOO_LARGE', 'Image 10 MB se chhoti honi chahiye.');
+      return sendError(res, 400, 'FILE_TOO_LARGE', 'Image must be smaller than 10 MB.');
     }
 
     // Magic-byte verification (Section 7.4 security checklist)
@@ -461,7 +461,7 @@ export function createMessagesRouter(db, requireAuth, io) {
     const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
     const isWebp = buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
     if (!isJpeg && !isPng && !isWebp) {
-      return sendError(res, 400, 'INVALID_FILE', 'File magic-byte check fail hua.');
+      return sendError(res, 400, 'INVALID_FILE', 'File magic-byte verification failed.');
     }
 
     const safeId = String(req.params.fileId).replace(/[^a-zA-Z0-9-]/g, '');

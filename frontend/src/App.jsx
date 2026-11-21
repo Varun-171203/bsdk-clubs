@@ -542,7 +542,7 @@ export default function App() {
             : c
         )
       );
-      showToast('Message sabke liye delete ho gaya.');
+      showToast('Message deleted for everyone.');
     } catch (err) {
       showToast(err.message);
     }
@@ -593,13 +593,13 @@ export default function App() {
   }
 
   async function handleLeaveClub(club) {
-    if (!window.confirm(`Pakka "${club.name}" chhodna hai?`)) return;
+    if (!window.confirm(`Are you sure you want to leave "${club.name}"?`)) return;
     try {
       await apiRequest(`/clubs/${club.id}/leave`, { method: 'POST' });
       setShowGroupInfo(false);
       if (activeClubId === club.id) setActiveClubId(null);
       await loadClubs();
-      showToast(`Tumne ${club.name} chhod diya.`);
+      showToast(`You left ${club.name}.`);
     } catch (err) {
       showToast(err.message);
     }
@@ -873,7 +873,7 @@ export default function App() {
             </p>
             <div className="trust-note" style={{ maxWidth: 420 }}>
               <Sparkles size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6 }} />
-              Real members Group Info mein visible hain; chat mein har member sirf per-group alias se dikhta hai.
+              Real members are visible in Group Info; inside chat each member appears only with a per-group alias.
             </div>
             <button type="button" className="btn-primary" onClick={() => setShowCreateClub(true)}>
               <Plus size={17} /> Create New Club
@@ -941,7 +941,7 @@ export default function App() {
           onClose={() => setShowQuickStatusCam(false)}
           onCapture={async ({ media_url, caption }) => {
             const targetId = activeClubId || clubs[0]?.id;
-            if (!targetId) return showToast('Pehle ek club join ya create karo.');
+            if (!targetId) return showToast('Please create or join a club first.');
             await apiRequest(`/clubs/${targetId}/statuses`, {
               method: 'POST',
               body: { type: 'image', media_url, caption }

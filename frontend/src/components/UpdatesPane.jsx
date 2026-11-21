@@ -69,7 +69,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
       setStatusText('');
       setShowCreateText(false);
       onRefreshStatuses();
-      onToast('Anonymous status 24 ghante ke liye lag gaya!');
+      onToast('Anonymous status posted (24h)!');
     } catch (err) {
       onToast(err.message);
     } finally {
@@ -84,7 +84,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
     const cleanReply = replyText.trim();
     setReplyText('');
     await onReplyToStatus(viewerGroup.club_id, `[Status Reply to ${status.alias_name}]: ${cleanReply}`);
-    onToast(`Reply bhej diya gaya as ${viewerGroup.my_alias}!`);
+    onToast(`Reply sent as ${viewerGroup.my_alias}!`);
     setViewerGroup(null);
   }
 
@@ -103,7 +103,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>My Anonymous Status</div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-              {myStatusesCount > 0 ? `${myStatusesCount} active status (24h expiry)` : 'Club-wise status lagao — kisi ko nahi pata kisne lagaya'}
+              {myStatusesCount > 0 ? `${myStatusesCount} active status (24h expiry)` : 'Post a 24h status to your club — author identity is completely hidden'}
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
 
         {activeGroups.every((g) => g.statuses.length === 0) ? (
           <div className="empty-state-center">
-            <div>Abhi kisi club mein status nahi laga hai. Pehla status tum lagao!</div>
+            <div>No status updates yet. Be the first to post a status!</div>
           </div>
         ) : (
           activeGroups.map((group) => {
@@ -227,7 +227,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
             </div>
             <form onSubmit={handlePostTextStatus}>
               <div className="field-group">
-                <label className="field-label">Select Club (sirf is club ko dikhega)</label>
+                <label className="field-label">Select Club (visible to members of this club only)</label>
                 <select className="text-input" value={targetClubId} onChange={(e) => setTargetClubId(e.target.value)}>
                   {clubs.map((c) => (
                     <option key={c.id} value={c.id}>{c.name} (as {c.my_alias})</option>
@@ -237,7 +237,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
               <div style={{ borderRadius: 14, background: statusBg, padding: 20, marginBottom: 12 }}>
                 <textarea
                   rows={4}
-                  placeholder="Kuch anonymous confession ya update likho..."
+                  placeholder="Write an anonymous update or confession..."
                   value={statusText}
                   onChange={(e) => setStatusText(e.target.value)}
                   required
@@ -281,7 +281,7 @@ export function UpdatesPane({ clubs, statusGroups, onRefreshStatuses, onReplyToS
               body: { type: 'image', media_url, caption }
             });
             onRefreshStatuses();
-            onToast('Camera status 24h ke liye lag gaya!');
+            onToast('Camera status posted (24h)!');
           }}
         />
       )}
