@@ -112,6 +112,7 @@ export function CallScreen({
   const voiceChangerRef = useRef(null);
   const timerRef = useRef(null);
   const toneGenRef = useRef(null);
+  const candidateQueueRef = useRef([]);
 
   const isVideo = callSession.callType === 'video' && !callSession.isGroup;
   const isClubCall = Boolean(callSession.isGroup || callSession.club);
@@ -128,6 +129,24 @@ export function CallScreen({
       toneGenRef.current?.stop();
     };
   }, []);
+
+  // For club calls or outgoing calls, initialize early
+  useEffect(() => {
+    if (isClubCall) {
+      if (warningAccepted) {
+        socket?.emit('call:join_room', {
+          room_id: callSession.roomId,
+          alias_name: callSession.club?.my_alias || 'Member',
+          alias_color: callSession.club?.my_alias_color || '#128C7E',
+          is_video: isVideo
+        });
+        setCallState('connected');
+        setupPeerConnection();
+      }
+    } else if (callSession.mode === 'outgoing') {
+      setupPeerConnection();
+    }
+  }, [warningAccepted]);
 
   // Format call duration into MM:SS
   const formatTimer = (seconds) => {
@@ -168,10 +187,26 @@ export function CallScreen({
   useEffect(() => {
     if (!socket) return;
 
-    const handleAnswered = () => {
+    const handleAnswered = async () => {
       toneGenRef.current?.stop();
       setCallState('connected');
-      setupPeerConnection();
+      if (!peerConnectionRef.current) {
+        await setupPeerConnection();
+      }
+      const pc = peerConnectionRef.current;
+      if (pc && callSession.mode === 'outgoing') {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('call:signal', {
+            room_id: callSession.roomId,
+            to_user_id: callSession.peer?.id,
+            signal: { sdp: offer }
+          });
+        } catch (e) {
+          console.warn('[Create Offer on Answer Error]', e);
+        }
+      }
     };
 
     const handleRejected = () => {
@@ -196,23 +231,42 @@ export function CallScreen({
     };
 
     const handleSignal = async ({ from_user_id, signal }) => {
+      // Ignore self-signals
+      if (from_user_id && currentUser?.id && from_user_id === currentUser.id) return;
+
       if (!peerConnectionRef.current) {
         await setupPeerConnection();
       }
+      const pc = peerConnectionRef.current;
+      if (!pc || !signal) return;
+
       try {
         if (signal.sdp) {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           if (signal.sdp.type === 'offer') {
-            const answer = await peerConnectionRef.current.createAnswer();
-            await peerConnectionRef.current.setLocalDescription(answer);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
             socket.emit('call:signal', {
               room_id: callSession.roomId,
               to_user_id: from_user_id,
               signal: { sdp: answer }
             });
           }
+          // Drain candidate queue
+          while (candidateQueueRef.current.length > 0) {
+            const cand = candidateQueueRef.current.shift();
+            try {
+              await pc.addIceCandidate(cand);
+            } catch (err) {
+              console.warn('[Drain candidate error]', err);
+            }
+          }
         } else if (signal.candidate) {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } else {
+            candidateQueueRef.current.push(new RTCIceCandidate(signal.candidate));
+          }
         }
       } catch (err) {
         console.warn('[WebRTC Signal Error]', err);
@@ -234,7 +288,7 @@ export function CallScreen({
       socket.off('call:user_left', handleUserLeft);
       socket.off('call:signal', handleSignal);
     };
-  }, [socket, callSession.roomId]);
+  }, [socket, callSession.roomId, callSession.mode, callSession.peer?.id, currentUser?.id]);
 
   // Request user media and create voice changer
   async function initializeMedia() {
@@ -359,7 +413,7 @@ export function CallScreen({
     try {
       await apiRequest('/calls/end', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           room_id: callSession.roomId,
           caller_id: callSession.mode === 'outgoing' ? currentUser?.id : callSession.peer?.id,
           callee_id: callSession.isGroup ? null : (callSession.mode === 'outgoing' ? callSession.peer?.id : currentUser?.id),
@@ -368,7 +422,7 @@ export function CallScreen({
           is_group: Boolean(callSession.isGroup),
           status: callDuration > 0 ? 'completed' : status,
           duration_seconds: callDuration
-        })
+        }
       });
     } catch (err) {
       console.warn('[Calls End API Warning]', err);

@@ -98,6 +98,27 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+}
+
+html, body, #root,
+.wa-app-container, .app-shell,
+header, aside, main, nav, footer,
+.chat-list-item, .chat-item, .chat-header, .chat-header-info,
+.nav-tabs-bar, .nav-tab-btn, button, .icon-btn,
+.message-meta, .chat-header-title, .chat-header-sub,
+.popover-menu, .popover-item, .trust-note, .empty-state-center,
+.chat-wallpaper, .sidebar, .chat-area, .composer-bar,
+.message-row, .message-bubble, .meta-time, .status-card,
+.modal-backdrop, .modal-sheet, .modal-card, .btn-primary, .btn-secondary {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  outline: none !important;
 }
 
 html, body, #root {
@@ -118,8 +139,23 @@ button, input, textarea, select {
 
 button {
   cursor: pointer;
+  background: transparent;
   border: none;
-  background: none;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+}
+
+button:focus, button:active, button:focus-visible {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  box-shadow: none !important;
+}
+
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 img {
@@ -572,6 +608,23 @@ img {
   color: var(--text-secondary);
   position: relative;
   transition: color 0.15s;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  box-shadow: none !important;
+}
+
+.nav-tab-btn:hover,
+.nav-tab-btn:focus,
+.nav-tab-btn:active,
+.nav-tab-btn:focus-visible {
+  background: transparent !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .nav-tab-btn .nav-pill {

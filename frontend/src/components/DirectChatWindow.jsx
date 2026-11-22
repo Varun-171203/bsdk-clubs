@@ -55,6 +55,7 @@ export function DirectChatWindow({
   const docInputRef = useRef(null);
   const recordIntervalRef = useRef(null);
   const callTimerRef = useRef(null);
+  const isSubmittingRef = useRef(false);
 
   const effectiveMyUserId = currentUser?.id || getStoredAuth()?.user?.id || 'me';
   const effectivePeerId = peer?.id || peer?.user_id;
@@ -258,9 +259,13 @@ export function DirectChatWindow({
 
   // Send encrypted text message
   async function handleSendText(e) {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const clean = text.trim();
-    if (!clean) return;
+    if (!clean || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     setText('');
     setShowAttachMenu(false);
@@ -268,27 +273,27 @@ export function DirectChatWindow({
       socket.emit('direct_typing', { recipient_id: effectivePeerId, is_typing: false });
     }
 
-    const { ciphertext, iv } = await encryptClientMessage(clean);
-    const expiresAt = new Date(Date.now() + disappearingDays * 24 * 60 * 60 * 1000).toISOString();
-
-    const tempId = `temp_${Date.now()}`;
-    const optimisticMsg = {
-      id: tempId,
-      sender_id: effectiveMyUserId,
-      recipient_id: effectivePeerId,
-      ciphertext,
-      iv,
-      type: 'text',
-      status: 'sent',
-      decryptedText: clean,
-      is_mine: true,
-      created_at: new Date().toISOString(),
-      expires_at: expiresAt
-    };
-
-    setMessages((prev) => [...prev, optimisticMsg]);
-
     try {
+      const { ciphertext, iv } = await encryptClientMessage(clean);
+      const expiresAt = new Date(Date.now() + disappearingDays * 24 * 60 * 60 * 1000).toISOString();
+
+      const tempId = `temp_${Date.now()}`;
+      const optimisticMsg = {
+        id: tempId,
+        sender_id: effectiveMyUserId,
+        recipient_id: effectivePeerId,
+        ciphertext,
+        iv,
+        type: 'text',
+        status: 'sent',
+        decryptedText: clean,
+        is_mine: true,
+        created_at: new Date().toISOString(),
+        expires_at: expiresAt
+      };
+
+      setMessages((prev) => [...prev, optimisticMsg]);
+
       const res = await apiRequest('/messages', {
         method: 'POST',
         body: {
@@ -307,6 +312,10 @@ export function DirectChatWindow({
     } catch (err) {
       console.error('[DirectChat] Send error:', err);
       onToast?.('Message send failed. Check connection.');
+    } finally {
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 350);
     }
   }
 

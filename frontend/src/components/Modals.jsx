@@ -224,6 +224,7 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
   const [multiChoice, setMultiChoice] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   function updateOpt(idx, val) {
     setOptions((prev) => prev.map((o, i) => (i === idx ? val : o)));
@@ -245,6 +246,8 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
       setError('Question aur kam se kam 2 options likho.');
       return;
     }
+    if (isSubmittingRef.current || loading) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       const clientMessageId = `cmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -263,6 +266,7 @@ export function CreatePollModal({ clubId, onClose, onCreated }) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setTimeout(() => { isSubmittingRef.current = false; }, 400);
     }
   }
 

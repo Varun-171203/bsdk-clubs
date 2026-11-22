@@ -5,9 +5,11 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Window;
+import android.webkit.PermissionRequest;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
 public class MainActivity extends BridgeActivity {
     private static final int CALL_PERMISSIONS_CODE = 1001;
@@ -51,6 +53,22 @@ public class MainActivity extends BridgeActivity {
 
         if (needsRequest) {
             ActivityCompat.requestPermissions(this, requiredPermissions, CALL_PERMISSIONS_CODE);
+        }
+
+        // Grant WebRTC microphone and camera access directly to the WebView
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(bridge) {
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    runOnUiThread(() -> {
+                        try {
+                            request.grant(request.getResources());
+                        } catch (Exception e) {
+                            super.onPermissionRequest(request);
+                        }
+                    });
+                }
+            });
         }
     }
 

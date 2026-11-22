@@ -233,12 +233,13 @@ export async function apiRequest(path, { method = 'GET', body, authRequired = tr
   }
 
   const endpoint = `${getApiBase()}${path}`;
+  const serializedBody = body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined;
   let res;
   try {
     res = await fetch(endpoint, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined
+      body: serializedBody
     });
   } catch {
     throw new Error(
@@ -255,7 +256,7 @@ export async function apiRequest(path, { method = 'GET', body, authRequired = tr
         res = await fetch(endpoint, {
           method,
           headers,
-          body: body !== undefined ? JSON.stringify(body) : undefined
+          body: serializedBody
         });
       }
     } catch (refreshErr) {

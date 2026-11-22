@@ -444,11 +444,11 @@ export default function App() {
     try {
       const res = await apiRequest('/calls/token', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           callee_id: !isGroup ? (target?.id || target?.user_id) : undefined,
           club_id: isGroup ? target?.id : undefined,
           call_type: callType
-        })
+        }
       });
 
       if (!res || !res.token) {
@@ -904,10 +904,16 @@ export default function App() {
             onToggleReaction={handleToggleReaction}
             onVotePoll={handleVotePoll}
             onPollCreated={(pollMsg) => {
-              setMessagesByClub((prev) => ({
-                ...prev,
-                [activeClub.id]: [...(prev[activeClub.id] || []), { ...pollMsg, is_mine: true, status: 'sent' }]
-              }));
+              setMessagesByClub((prev) => {
+                const list = prev[activeClub.id] || [];
+                if (list.some((m) => m.id === pollMsg.id || (pollMsg.client_message_id && m.client_message_id === pollMsg.client_message_id))) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  [activeClub.id]: [...list, { ...pollMsg, is_mine: true, status: 'sent' }]
+                };
+              });
               setClubs((prev) =>
                 prev.map((c) =>
                   c.id === activeClub.id

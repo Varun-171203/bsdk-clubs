@@ -153,25 +153,38 @@ export function ChatWindow({
     }, 1800);
   }
 
+  const isSubmittingRef = useRef(false);
+
   async function handleSubmit(e) {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const clean = text.trim();
-    if (!clean) return;
+    if (!clean || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setText('');
     setShowEmoji(false);
     onEmitTyping(club.id, false);
-    await onSendMessage({
-      type: 'text',
-      body: clean,
-      reply_to_id: replyTo?.id || null
-    });
-    setReplyTo(null);
+    try {
+      await onSendMessage({
+        type: 'text',
+        body: clean,
+        reply_to_id: replyTo?.id || null
+      });
+      setReplyTo(null);
+    } finally {
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 350);
+    }
   }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey && settings?.chats?.enter_is_send !== false) {
       e.preventDefault();
-      handleSubmit();
+      e.stopPropagation();
+      handleSubmit(e);
     }
   }
 

@@ -183,6 +183,33 @@ export function createMessagesRouter(db, requireAuth, io) {
       return sendError(res, 400, 'VALIDATION', 'Camera photo is required.');
     }
 
+    // Idempotency: Prevent duplicate messages from network retries or double submits
+    if (client_message_id) {
+      const existing = db.prepare('SELECT id FROM messages WHERE club_id = ? AND client_message_id = ?').get(req.params.id, String(client_message_id).slice(0, 100));
+      if (existing) {
+        const existingRow = db.prepare(`
+          SELECT m.*, cm.alias_name, cm.alias_color
+          FROM messages m JOIN club_members cm ON cm.id = m.sender_member_id
+          WHERE m.id = ?
+        `).get(existing.id);
+        return res.status(200).json({ message: formatMessage(existingRow, membership.id) });
+      }
+    }
+    const dupWindow = new Date(Date.now() - 1500).toISOString();
+    const recentDuplicate = db.prepare(`
+      SELECT id FROM messages
+      WHERE club_id = ? AND sender_member_id = ? AND type = ? AND body = ? AND created_at >= ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(req.params.id, membership.id, type, cleanBody.slice(0, 4000), dupWindow);
+    if (recentDuplicate) {
+      const existingRow = db.prepare(`
+        SELECT m.*, cm.alias_name, cm.alias_color
+        FROM messages m JOIN club_members cm ON cm.id = m.sender_member_id
+        WHERE m.id = ?
+      `).get(recentDuplicate.id);
+      return res.status(200).json({ message: formatMessage(existingRow, membership.id) });
+    }
+
     const club = db.prepare('SELECT disappearing_seconds FROM clubs WHERE id = ?').get(req.params.id);
     const now = new Date();
     const nowIso = now.toISOString();
@@ -328,6 +355,33 @@ export function createMessagesRouter(db, requireAuth, io) {
     }
     if (cleanOpts.length < 2 || cleanOpts.length > 6) {
       return sendError(res, 400, 'VALIDATION', 'Poll must have between 2 and 6 options.');
+    }
+
+    // Idempotency: Prevent duplicate messages from network retries or double submits
+    if (client_message_id) {
+      const existing = db.prepare('SELECT id FROM messages WHERE club_id = ? AND client_message_id = ?').get(req.params.id, String(client_message_id).slice(0, 100));
+      if (existing) {
+        const existingRow = db.prepare(`
+          SELECT m.*, cm.alias_name, cm.alias_color
+          FROM messages m JOIN club_members cm ON cm.id = m.sender_member_id
+          WHERE m.id = ?
+        `).get(existing.id);
+        return res.status(200).json({ message: formatMessage(existingRow, membership.id) });
+      }
+    }
+    const dupWindow = new Date(Date.now() - 2000).toISOString();
+    const recentDuplicate = db.prepare(`
+      SELECT id FROM messages
+      WHERE club_id = ? AND sender_member_id = ? AND type = 'poll' AND body = ? AND created_at >= ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(req.params.id, membership.id, cleanQ, dupWindow);
+    if (recentDuplicate) {
+      const existingRow = db.prepare(`
+        SELECT m.*, cm.alias_name, cm.alias_color
+        FROM messages m JOIN club_members cm ON cm.id = m.sender_member_id
+        WHERE m.id = ?
+      `).get(recentDuplicate.id);
+      return res.status(200).json({ message: formatMessage(existingRow, membership.id) });
     }
 
     const club = db.prepare('SELECT disappearing_seconds FROM clubs WHERE id = ?').get(req.params.id);

@@ -4,12 +4,12 @@ import { sendError } from './utils.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'bsdk_clubs_dev_jwt_secret_change_in_prod';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'bsdk_clubs_dev_refresh_secret_change_in_prod';
 
-// Access token (15m in prod / 2h in dev), Refresh token (30 days)
+// Access token (1 year in mobile app), Refresh token (1 year)
 export function signAccessToken(user, deviceId = 'primary') {
   return jwt.sign(
     { sub: user.id, phone: user.phone, uid: user.user_id, device_id: deviceId },
     JWT_SECRET,
-    { expiresIn: '2h' }
+    { expiresIn: '365d' }
   );
 }
 
@@ -17,7 +17,7 @@ export function signRefreshToken(user, deviceId = 'primary') {
   return jwt.sign(
     { sub: user.id, phone: user.phone, uid: user.user_id, device_id: deviceId, type: 'refresh' },
     JWT_REFRESH_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: '365d' }
   );
 }
 
